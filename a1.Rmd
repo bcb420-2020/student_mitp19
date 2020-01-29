@@ -1,0 +1,28 @@
+---
+title: "BCB420 - A1"
+output:
+  html_document:
+    df_print: paged
+author: "Mit Patel"
+---
+
+Setup and package installation: 
+```{r setup, message=FALSE, results='hide'}
+knitr::opts_chunk$set(warning = FALSE)
+install.packages(pkgs = c("BiocManager","dplyr"),
+         repos = "http://cran.rstudio.org",
+         dependencies = TRUE,
+         quiet = TRUE)
+library("GEOquery")
+```
+
+## Downloading dataset and supplementary files 
+```{r data download, message=FALSE, results='hide'}
+gset <- getGEO("GSE49800", GSEMatrix =TRUE, getGPL=FALSE)
+sfiles = getGEOSuppFiles('GSE49800')
+
+current_gpl <- names(GPLList(gset))[1]
+current_gpl_info <- Meta(getGEO(current_gpl))
+```
+
+
