@@ -13,16 +13,50 @@ install.packages(pkgs = c("BiocManager","dplyr"),
          repos = "http://cran.rstudio.org",
          dependencies = TRUE,
          quiet = TRUE)
-library("GEOquery")
+library(BiocManager)
+library(Biobase)
+library(GEOquery)
 ```
 
 ## Downloading dataset and supplementary files 
 ```{r data download, message=FALSE, results='hide'}
-gset <- getGEO("GSE49800", GSEMatrix =TRUE, getGPL=FALSE)
-sfiles = getGEOSuppFiles('GSE49800')
-
-current_gpl <- names(GPLList(gset))[1]
+gset <- getGEO("GSE108539", GSEMatrix=FALSE, getGPL=FALSE)
+current_gpl <- names(GPLList(gset))
 current_gpl_info <- Meta(getGEO(current_gpl))
+
+
 ```
 
+## Information about Platform
+**Platform Title:** `r current_gpl_info$title`\
+**Original submission date:** `r current_gpl_info$submission_date`\
+**Last update date:** `r current_gpl_info$last_update_date`\
+**Organism:** `r current_gpl_info$organism`\
+**No. of GEO datasets that use this technology:** `r length(current_gpl_info$series_id)`\
+**No. of GEO samples that use this technology:** `r length(current_gpl_info$sample_id)`
 
+```{r}
+
+sfiles = getGEOSuppFiles('GSE108539')
+fnames = rownames(sfiles)
+exp_data = read.delim(fnames[1],header=TRUE,
+                check.names = FALSE)
+```
+
+```{r class example}
+sfiles = getGEOSuppFiles('GSE70072')
+fnames_class = rownames(sfiles)
+ca125_exp = read.delim(fnames_class[1],header=TRUE,
+                check.names = FALSE)
+
+samples <- data.frame(lapply(colnames(ca125_exp)[3:22], 
+        FUN=function(x){unlist(strsplit(x, split = "\\."))[c(2,3)]}))
+colnames(samples) <- colnames(ca125_exp)[3:22]
+rownames(samples) <- c("patients","cell_type")
+samples <- data.frame(t(samples))
+
+```
+
+```{r}
+
+```
