@@ -5,7 +5,19 @@ output:
     df_print: paged
 author: "Mit Patel"
 ---
-
+### Dataset Information 
+Publication Title: Transcriptomic analyses reveal rhythmic and CLOCK-driven pathways in human skeletal muscle\
+Publication Date: 2018-04-16\
+Publication Journal: eLife\
+GEO ID: GSE108539
+\
+\
+\
+The dataset has intronic and extronic regions for each sample. The groups were defined as per the following definitions [1]
+* Exonic: if it occurs in at least one of the transcripts
+* Intronic: if it is shared between all the transcripts
+Also, genes with less than two intronic reads or 10 exonic reads on average were discarded
+\
 Setup and package installation: 
 ```{r setup, message=FALSE, results='hide'}
 knitr::opts_chunk$set(warning = FALSE)
@@ -16,15 +28,14 @@ install.packages(pkgs = c("BiocManager","dplyr"),
 library(BiocManager)
 library(Biobase)
 library(GEOquery)
+library(edgeR)
 ```
 
-## Downloading dataset and supplementary files 
+### Downloading dataset and supplementary files 
 ```{r data download, message=FALSE, results='hide'}
 gset <- getGEO("GSE108539", GSEMatrix=FALSE, getGPL=FALSE)
 current_gpl <- names(GPLList(gset))
 current_gpl_info <- Meta(getGEO(current_gpl))
-
-
 ```
 
 ## Information about Platform
@@ -34,29 +45,88 @@ current_gpl_info <- Meta(getGEO(current_gpl))
 **Organism:** `r current_gpl_info$organism`\
 **No. of GEO datasets that use this technology:** `r length(current_gpl_info$series_id)`\
 **No. of GEO samples that use this technology:** `r length(current_gpl_info$sample_id)`
-
-```{r}
+### Here we are creating a table to show the groups in our sampling:
+```{r downloading data from GEO query}
 
 sfiles = getGEOSuppFiles('GSE108539')
 fnames = rownames(sfiles)
 exp_data = read.delim(fnames[1],header=TRUE,
                 check.names = FALSE)
+
+samples <- data.frame(lapply(colnames(exp_data)[2:115],
+                             FUN = function(x) {
+                               unlist(strsplit(x, split="_"))[c(2,3,4,1)]
+                             }))
+colnames(samples) <- colnames(exp_data)[2:115]
+rownames(samples) <- c("patients", "sample_number", "time", "sequence_type")
+samples <- data.frame(t(samples))
+```
+We have **`r nrow(exp_data)` genes** expressed in the dataset. These genes come from **`r nrow(samples$patients)` samples** from **`r length(unique(samples$patients))` study participants**. Each participant was sampled at 6 times in 4 hour intervals. 
+
+# Normalization
+The available count data on GEO was already normalized and filtered as described in [1]. The authors of the dataset performed the following pre-processing procedure: 
+1. Transcripts with lower than 3 CPM were removed
+2. Transcripts that were not aligned were removed
+3. Scaling factors were determined using the Trimmed M-values method [2] was applied
+
+```{r box plot distribution of data, fig.width=8}
+plot_data = exp_data[, 2:115]
+boxplot(plot_data, xlab = "Samples", ylab = "log2 CPM", 
+        las = 2, cex = 0.5, cex.lab = 0.5,
+        cex.axis = 0.5, main = "RNASeq ") #CHANGE TITLE HERE
+abline(h = median(apply(plot_data, 2, median)), col = "red", lwd = 0.6, lty = "solid")
+```
+```{r density plot distribution of data, fig.height=8, fig.width=8}
+counts_density <- apply(exp_data[, 2:115], 2, density)  #calculate the limits across all the samples
+xlim <- 0; ylim <- 0
+for (i in 1:length(counts_density)) {
+  xlim <- range(c(xlim, counts_density[[i]]$x)); 
+  ylim <- range(c(ylim, counts_density[[i]]$y))
+}
+cols <- rainbow(length(counts_density))
+ltys <- rep(1, length(counts_density))
+#plot the first density plot to initialize the plot
+plot(counts_density[[1]], xlim=xlim, ylim=ylim, type="n", 
+     ylab="density", xlab="log2(cpm)", main="Density Plot: Filtered Counts", cex.lab = 0.85)
+#plot each line
+for (i in 1:length(counts_density)) lines(counts_density[[i]], col=cols[i], lty=ltys[i])
+#create legend
+legend("right", colnames(plot_data),  
+       col=cols, lty=ltys, cex=0.75, 
+       border ="blue",  text.col = "green4", 
+       merge = TRUE, bg = "gray90")
+
 ```
 
-```{r class example}
-sfiles = getGEOSuppFiles('GSE70072')
-fnames_class = rownames(sfiles)
-ca125_exp = read.delim(fnames_class[1],header=TRUE,
-                check.names = FALSE)
+```{r MSD Plot}
+filtered_data_matrix <- as.matrix(exp_data[,2:115])
+reversed_data_matrix <- apply(filtered_data_matrix, 2, function(x) 2^x)
+rownames(reversed_data_matrix) <- exp_data$Gene_name
+d = DGEList(counts=reversed_data_matrix, group=samples$cell_type)
+d = calcNormFactors(d)
+normalized_counts <- cpm(d)
 
-samples <- data.frame(lapply(colnames(ca125_exp)[3:22], 
-        FUN=function(x){unlist(strsplit(x, split = "\\."))[c(2,3)]}))
-colnames(samples) <- colnames(ca125_exp)[3:22]
-rownames(samples) <- c("patients","cell_type")
-samples <- data.frame(t(samples))
+plotMDS(d, labels=rownames(samples),
+        col = c("darkgreen","blue")[factor(samples$sequence_type)],
+        main="Multidimensional Scaling Plot: Distance betweeen Samples")
+```
+
+```{r tagwise dispersion}
+model_design <- model.matrix(~samples$patients + samples$sequence_type+0)
+d <- estimateDisp(d, model_design)
+plotBCV(d,col.tagwise = "black",col.common = "red")
 
 ```
 
 ```{r}
-
+plotMeanVar(d, show.raw.vars = TRUE, show.tagwise.vars=TRUE, 
+            show.ave.raw.vars = TRUE,  
+            NBline=TRUE,
+            show.binned.common.disp.vars = TRUE)
 ```
+
+## References
+[1] Perrin, Laurent, Ursula Loizides-Mangold, Stéphanie Chanon, Cédric Gobet, Nicolas Hulo, Laura Isenegger, Benjamin D Weger, et al. “Transcriptomic Analyses Reveal Rhythmic and CLOCK-Driven Pathways in Human Skeletal Muscle.” ELife 7 (April 16, 2018): e34114. https://doi.org/10.7554/eLife.34114.
+
+[2] Robinson, M. D., D. J. McCarthy, and G. K. Smyth. “EdgeR: A Bioconductor Package for Differential Expression Analysis of Digital Gene Expression Data.” Bioinformatics 26, no. 1 (January 1, 2010): 139–40. https://doi.org/10.1093/bioinformatics/btp616.
+
