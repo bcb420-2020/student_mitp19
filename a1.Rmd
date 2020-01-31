@@ -12,7 +12,6 @@ Publication Journal: eLife\
 GEO ID: GSE108539
 \
 \
-\
 The dataset has intronic and extronic regions for each sample. The groups were defined as per the following definitions [1]
 * Exonic: if it occurs in at least one of the transcripts
 * Intronic: if it is shared between all the transcripts
@@ -21,14 +20,17 @@ Also, genes with less than two intronic reads or 10 exonic reads on average were
 Setup and package installation: 
 ```{r setup, message=FALSE, results='hide'}
 knitr::opts_chunk$set(warning = FALSE)
-install.packages(pkgs = c("BiocManager","dplyr"),
+install.packages(pkgs = c("BiocManager","dplyr", "biomaRt"),
          repos = "http://cran.rstudio.org",
          dependencies = TRUE,
          quiet = TRUE)
+BiocManager::install("biomaRt")
+
 library(BiocManager)
 library(Biobase)
 library(GEOquery)
 library(edgeR)
+library(biomaRt)
 ```
 
 ### Downloading dataset and supplementary files 
@@ -64,17 +66,28 @@ samples <- data.frame(t(samples))
 We have **`r nrow(exp_data)` genes** expressed in the dataset. These genes come from **`r nrow(samples$patients)` samples** from **`r length(unique(samples$patients))` study participants**. Each participant was sampled at 6 times in 4 hour intervals. 
 
 # Normalization
-The available count data on GEO was already normalized and filtered as described in [1]. The authors of the dataset performed the following pre-processing procedure: 
+The available count data on GEO was already normalized and filtered as described in [1]. The authors of the dataset performed the following pre-processing procedure:\
 1. Transcripts with lower than 3 CPM were removed
 2. Transcripts that were not aligned were removed
 3. Scaling factors were determined using the Trimmed M-values method [2] was applied
 
 ```{r box plot distribution of data, fig.width=8}
 plot_data = exp_data[, 2:115]
-boxplot(plot_data, xlab = "Samples", ylab = "log2 CPM", 
+plot_data_intron <- exp_data[, 2:58]
+plot_data_exon <- exp_data[, 59:115]
+
+intron_plot <- boxplot(plot_data_intron, xlab = "Samples", ylab = "log2 CPM", 
         las = 2, cex = 0.5, cex.lab = 0.5,
-        cex.axis = 0.5, main = "RNASeq ") #CHANGE TITLE HERE
-abline(h = median(apply(plot_data, 2, median)), col = "red", lwd = 0.6, lty = "solid")
+        cex.axis = 0.5, main = "Box Plot: RNASeq Count Distribution for Intronsic Sequences")
+abline(h = median(apply(plot_data_intron, 2, median)), col = "red", lwd = 0.6, lty = "solid")
+
+
+boxplot(plot_data_exon, xlab = "Samples", ylab = "log2 CPM", 
+        las = 2, cex = 0.5, cex.lab = 0.5,
+        cex.axis = 0.5, main = "Box Plot: RNASeq Count Distribution for Exonic Sequences") #CHANGE TITLE HERE
+
+# Plotting the median line for exonic sequences
+abline(h = median(apply(plot_data_exon, 2, median)), col = "red", lwd = 0.6, lty = "solid")
 ```
 ```{r density plot distribution of data, fig.height=8, fig.width=8}
 counts_density <- apply(exp_data[, 2:115], 2, density)  #calculate the limits across all the samples
@@ -124,7 +137,42 @@ plotMeanVar(d, show.raw.vars = TRUE, show.tagwise.vars=TRUE,
             NBline=TRUE,
             show.binned.common.disp.vars = TRUE)
 ```
+# Identifier Mapping
+```{r identifier mapping}
+library(biomaRt)
+listMarts()
+listEnsemblArchives()[1:10,]
 
+ensembl <- useMart("ensembl")
+datasets <- listDatasets(ensembl)
+ensembl <- useDataset("hsapiens_gene_ensembl", mart=ensembl)
+biomart_human_filters <- listFilters(ensembl)
+biomart_human_filters[grep(biomart_human_filters$name,pattern="ensembl"),]
+listAttributes(ensembl)[1:10,1:2]
+
+conversion_stash <- "gene_id_conversion.rds"
+
+id_conversion <- getBM(attributes = c("ensembl_gene_id","hgnc_symbol"),
+                          filters = c("ensembl_gene_id"),
+                          values = exp_data$Gene_name,
+                          mart = ensembl)
+
+```
+The difference between number of mappings we found and number of genes in the normalized dataset is **`r nrow(exp_data) - nrow(id_conversion)`**
+
+This number however does not tell the fully story. We will merge the mappings with the normalized dataset to get a better picture of the maping.
+```{r}
+normalized_counts_annot <- merge(id_conversion, exp_data, by.x="ensembl_gene_id", by.y=1, all.y=TRUE)
+normalized_counts_annot[1:8, 1:2]
+```
+Based on our merged ensembl ids to hgnc symbols, we will identify the number of genes that did not match: 
+```{r}
+ensembl_id_missing_gene <- normalized_counts_annot$ensembl_gene_id[
+  which(is.na(normalized_counts_annot$hgnc_symbol))]
+```
+**`r length(ensembl_id_missing_gene)` identifiers are missing.**\
+This means `r round((length(ensembl_id_missing_gene) / length(exp_data)*100, 4)`
+\
 ## References
 [1] Perrin, Laurent, Ursula Loizides-Mangold, Stéphanie Chanon, Cédric Gobet, Nicolas Hulo, Laura Isenegger, Benjamin D Weger, et al. “Transcriptomic Analyses Reveal Rhythmic and CLOCK-Driven Pathways in Human Skeletal Muscle.” ELife 7 (April 16, 2018): e34114. https://doi.org/10.7554/eLife.34114.
 
