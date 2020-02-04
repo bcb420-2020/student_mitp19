@@ -6,17 +6,19 @@ output:
 author: "Mit Patel"
 ---
 ### Dataset Information 
-Publication Title: Transcriptomic analyses reveal rhythmic and CLOCK-driven pathways in human skeletal muscle\
-Publication Date: 2018-04-16\
-Publication Journal: eLife\
-GEO ID: GSE108539
-\
-\
-The dataset has intronic and extronic regions for each sample. The groups were defined as per the following definitions [1]
-* Exonic: if it occurs in at least one of the transcripts
-* Intronic: if it is shared between all the transcripts
-Also, genes with less than two intronic reads or 10 exonic reads on average were discarded
-\
+**Publication Title:** Transcriptomic analyses reveal rhythmic and CLOCK-driven pathways in human skeletal muscle
+
+**Publication Date:** 2018-04-16
+
+**Publication Journal:** eLife
+
+**GEO ID:** GSE108539
+
+The dataset has intronic and extronic regions for each sample. The groups were defined as per the following definitions [1]: \
+(1) Exonic: if it occurs in at least one of the transcripts \
+(2) Intronic: if it is shared between all the transcripts \
+Also, genes with less than two intronic reads or 10 exonic reads on average were discarded.
+
 Setup and package installation: 
 ```{r setup, message=FALSE, results='hide'}
 knitr::opts_chunk$set(warning = FALSE)
@@ -31,6 +33,7 @@ library(Biobase)
 library(GEOquery)
 library(edgeR)
 library(biomaRt)
+
 ```
 
 ### Downloading dataset and supplementary files 
@@ -46,8 +49,8 @@ current_gpl_info <- Meta(getGEO(current_gpl))
 **Last update date:** `r current_gpl_info$last_update_date`\
 **Organism:** `r current_gpl_info$organism`\
 **No. of GEO datasets that use this technology:** `r length(current_gpl_info$series_id)`\
-**No. of GEO samples that use this technology:** `r length(current_gpl_info$sample_id)`
-### Here we are creating a table to show the groups in our sampling:
+**No. of GEO samples that use this technology:** `r length(current_gpl_info$sample_id)` \
+### Here we are creating a table to show the groups in our sampling, and showing the 
 ```{r downloading data from GEO query}
 
 sfiles = getGEOSuppFiles('GSE108539')
@@ -62,13 +65,14 @@ samples <- data.frame(lapply(colnames(exp_data)[2:115],
 colnames(samples) <- colnames(exp_data)[2:115]
 rownames(samples) <- c("patients", "sample_number", "time", "sequence_type")
 samples <- data.frame(t(samples))
+samples[1:10, ] # showing first 10 rows.
 ```
-We have **`r nrow(exp_data)` genes** expressed in the dataset. These genes come from **`r nrow(samples$patients)` samples** from **`r length(unique(samples$patients))` study participants**. Each participant was sampled at 6 times in 4 hour intervals. 
+We have **`r nrow(exp_data)` genes** expressed in the dataset. These genes are based on **`r nrow(samples$patients)` samples** from **`r length(unique(samples$patients))` study participants**. Each participant was sampled at 6 times in 4 hour intervals. 
 
-# Normalization
+# Filtering and Normalizing
 The available count data on GEO was already normalized and filtered as described in [1]. The authors of the dataset performed the following pre-processing procedure:\
-1. Transcripts with lower than 3 CPM were removed
-2. Transcripts that were not aligned were removed
+1. Transcripts with lower than 3 CPM were removed\
+2. Transcripts that were not aligned were removed\
 3. Scaling factors were determined using the Trimmed M-values method [2] was applied
 
 ```{r box plot distribution of data, fig.width=8}
@@ -84,11 +88,11 @@ abline(h = median(apply(plot_data_intron, 2, median)), col = "red", lwd = 0.6, l
 
 boxplot(plot_data_exon, xlab = "Samples", ylab = "log2 CPM", 
         las = 2, cex = 0.5, cex.lab = 0.5,
-        cex.axis = 0.5, main = "Box Plot: RNASeq Count Distribution for Exonic Sequences") #CHANGE TITLE HERE
-
-# Plotting the median line for exonic sequences
+        cex.axis = 0.5, main = "Box Plot: RNASeq Count Distribution for Exonic Sequences") #CHANGE 
 abline(h = median(apply(plot_data_exon, 2, median)), col = "red", lwd = 0.6, lty = "solid")
 ```
+Both box plots show us a very well normalized set of data. No outliers can be seen from this. A key difference to note here is the difference in medians between intron and exon sequences. 
+
 ```{r density plot distribution of data, fig.height=8, fig.width=8}
 counts_density <- apply(exp_data[, 2:115], 2, density)  #calculate the limits across all the samples
 xlim <- 0; ylim <- 0
@@ -110,12 +114,13 @@ legend("right", colnames(plot_data),
        merge = TRUE, bg = "gray90")
 
 ```
-
+Again we see a similar trend as we did in the box plot. Intron sequences (green lines) are distributed evenly but are quite distinct from exon sequences (blue). 
 ```{r MSD Plot}
 filtered_data_matrix <- as.matrix(exp_data[,2:115])
+# reversing the count values because they a provided in log2()
 reversed_data_matrix <- apply(filtered_data_matrix, 2, function(x) 2^x)
 rownames(reversed_data_matrix) <- exp_data$Gene_name
-d = DGEList(counts=reversed_data_matrix, group=samples$cell_type)
+d = DGEList(counts=reversed_data_matrix, group=samples$sequence_type)
 d = calcNormFactors(d)
 normalized_counts <- cpm(d)
 
@@ -124,20 +129,30 @@ plotMDS(d, labels=rownames(samples),
         main="Multidimensional Scaling Plot: Distance betweeen Samples")
 ```
 
+
+Next, we will show common vs tagwise dispersion. Dispersion measures the how much our counts deviate from the mean.
 ```{r tagwise dispersion}
-model_design <- model.matrix(~samples$patients + samples$sequence_type+0)
+
+model_design <- model.matrix(~samples$patients)
 d <- estimateDisp(d, model_design)
-plotBCV(d,col.tagwise = "black",col.common = "red")
+plotBCV(d,col.tagwise = "black",col.common = "red", main="Common vs Tagwise Dispersion")
 
 ```
+Here we see genes with lower counts tend to have higher variations while the variation decreases with an increase in gene count. An important aspect to this plot is also the large amount of gene with no vairance from 0-8 log CPM. 
 
+Next, we will plot the mean and variance relationship.
 ```{r}
 plotMeanVar(d, show.raw.vars = TRUE, show.tagwise.vars=TRUE, 
             show.ave.raw.vars = TRUE,  
             NBline=TRUE,
-            show.binned.common.disp.vars = TRUE)
+            show.binned.common.disp.vars = TRUE,
+            main="Mean-variance relationship",
+            legend=TRUE)
 ```
+In this plot, the blue line shows the Negative Binomial. The black line shows the Poisson mean-variance relationship. The best fit of the data is marked by the red crosses. The data seems to have been normalized well and there is no overdispersion.
+
 # Identifier Mapping
+Here we will get information on the identifier datasets and map the ensembl IDs to the current HUGO symbols:
 ```{r identifier mapping}
 library(biomaRt)
 listMarts()
@@ -158,12 +173,22 @@ id_conversion <- getBM(attributes = c("ensembl_gene_id","hgnc_symbol"),
                           mart = ensembl)
 
 ```
+Now that we have mapped the genes to HGNC symbols, we will check if there are any ensembl ids that have duplicate HGNC symbols:
+```{r}
+summarized_gene_counts <- sort(table(id_conversion$hgnc_symbol),decreasing = TRUE)
+duplicated <- summarized_gene_counts[which(summarized_gene_counts>1)]
+duplicated
+```
+Hence, we have `r length(duplicated) - 1` genes that have duplicate mapping. Since this is a very small number relative to our overall database, we will not filter these out just yet. 
+
 The difference between number of mappings we found and number of genes in the normalized dataset is **`r nrow(exp_data) - nrow(id_conversion)`**
 
-This number however does not tell the fully story. We will merge the mappings with the normalized dataset to get a better picture of the maping.
+This number however does not tell the fully story. We will merge the mappings with the normalized dataset to get a better picture of the mapping.
 ```{r}
 normalized_counts_annot <- merge(id_conversion, exp_data, by.x="ensembl_gene_id", by.y=1, all.y=TRUE)
 normalized_counts_annot[1:8, 1:2]
+
+
 ```
 Based on our merged ensembl ids to hgnc symbols, we will identify the number of genes that did not match: 
 ```{r}
@@ -171,10 +196,61 @@ ensembl_id_missing_gene <- normalized_counts_annot$ensembl_gene_id[
   which(is.na(normalized_counts_annot$hgnc_symbol))]
 ```
 **`r length(ensembl_id_missing_gene)` identifiers are missing.**\
-This means `r round((length(ensembl_id_missing_gene) / length(exp_data)*100, 4)`
-\
-## References
-[1] Perrin, Laurent, Ursula Loizides-Mangold, Stéphanie Chanon, Cédric Gobet, Nicolas Hulo, Laura Isenegger, Benjamin D Weger, et al. “Transcriptomic Analyses Reveal Rhythmic and CLOCK-Driven Pathways in Human Skeletal Muscle.” ELife 7 (April 16, 2018): e34114. https://doi.org/10.7554/eLife.34114.
+`r length(ensembl_id_missing_gene)` out of `r nrow(exp_data)` have not been mapped.
+This accounts `r round((length(ensembl_id_missing_gene) / nrow(exp_data)) * 100, 2)`% of the genes that were not identifed. To address the unidentified genes, we will attempt to use a new tool called Biobtree [3]. This is an alternative tool to biomarRt, using a different dataset, hence we may be able to map some more unidentified genes. 
+```{r}
+# import package                          
+# set a output directory for biobtree files   
 
-[2] Robinson, M. D., D. J. McCarthy, and G. K. Smyth. “EdgeR: A Bioconductor Package for Differential Expression Analysis of Digital Gene Expression Data.” Bioinformatics 26, no. 1 (January 1, 2010): 139–40. https://doi.org/10.1093/bioinformatics/btp616.
+
+ensembl_id_missing_list <- strsplit(ensembl_id_missing_gene, " ")
+df <- data.frame(matrix(unlist(ensembl_id_missing_list), 
+                        nrow=length(ensembl_id_missing_gene), byrow=T))
+colnames(df) <- c("ensembl_id")
+
+
+#by(df, 1:nrow(df), function(row) {
+ # bbSearch(row[1, 1])
+#})
+
+# bbUseOutDir(tempdir())                                                     
+# retrive built-in biobtree database for commonly studied dataset and organism genomes
+# bbStop()
+# start biobtree server              
+# bbStart()     
+```
+```{r}
+
+# library(readxl)
+# elife_data <- read_excel("./elife-34114-fig1-data1.xlsx")
+# merged_missing <- merge(df, elife_data, by.x="ensembl_id", by.y="Ensembl_Gene")
+# merged_missing <- merged_missing[, c(1, 132)]
+```
+
+## Questions
+**What are the control and test conditions of the dataset?** \
+The control condition was skeletal muscle biopsies collected from human samples who were placed under rigid laboratory conditions. Biopsies were taken every 4 hours across a 24 hour period from 10 individuals. The test conditions were performed on cultured human primary skeletal myotubes (hSKM). Though analyzing the cultered data analysis is beyond the scope of the course, there are several groups that the dataset can be clustered into (i.e. by demographic of timepoint) for differential analysis. 
+
+**Why is the dataset of interest to you?** \
+I have been engaged in sleep research for the past few years at the level of physiological signals. Given my knowledge and previous experience in the sleep domain, exploring a dataset with biological signals related to sleep and circadian rhythms seemed quite fitting.
+
+**Were there expression values that were not unique for specific genes? How did you handle these?** \ 
+
+**Were there expression values that could not be mapped to current HUGO symbols?**
+Yes there were values that could not be mapped to current HUGO symbols. 
+
+**How many outliers were removed?** \
+No outliers were removed. 
+
+**How did you handle replicates?** \
+There were very few replicates. 3 genes had were replicated 2 times each. This is an insignificant amount of replication so we will simply filter these genes out in downstream analysis. 
+
+**What is the final coverage of your dataset?** \
+`r nrow(exp_data) - length(ensembl_id_missing_gene)` were mapped, accounting for `r ((nrow(exp_data) - length(ensembl_id_missing_gene))/nrow(exp_data))*100`% of the genes in the dataset. 
+
+
+## References
+[1]L. Perrin et al., “Transcriptomic analyses reveal rhythmic and CLOCK-driven pathways in human skeletal muscle,” eLife, vol. 7, p. e34114, Apr. 2018, doi: 10.7554/eLife.34114.
+
+[2]M. D. Robinson, D. J. McCarthy, and G. K. Smyth, “edgeR: a Bioconductor package for differential expression analysis of digital gene expression data,” Bioinformatics, vol. 26, no. 1, pp. 139–140, Jan. 2010, doi: 10.1093/bioinformatics/btp616.
 
