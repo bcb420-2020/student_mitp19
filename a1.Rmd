@@ -1,8 +1,6 @@
 ---
 title: "BCB420 - A1"
-output:
-  html_document:
-    df_print: paged
+output: html_document
 author: "Mit Patel"
 ---
 ### Dataset Information 
@@ -19,20 +17,28 @@ The dataset has intronic and extronic regions for each sample. The groups were d
 (2) Intronic: if it is shared between all the transcripts \
 Also, genes with less than two intronic reads or 10 exonic reads on average were discarded.
 
-Setup and package installation: 
+### Setup and package installation: 
 ```{r setup, message=FALSE, results='hide'}
 knitr::opts_chunk$set(warning = FALSE)
-install.packages(pkgs = c("BiocManager","dplyr", "biomaRt"),
-         repos = "http://cran.rstudio.org",
-         dependencies = TRUE,
-         quiet = TRUE)
-BiocManager::install("biomaRt")
+if (requireNamespace("BiocManager", quietly = TRUE)) {
+    install.packages("BiocManager",
+                     repos = "http://cran.rstudio.org",
+                     dependencies = TRUE,
+                     quiet=TRUE)
+}
+if (requireNamespace("dplyr", quietly = TRUE)) {
+    install.packages("dplyr",
+                     repos = "http://cran.rstudio.org",
+                     dependencies = TRUE,
+                     quiet=TRUE)
+}
 
 library(BiocManager)
 library(Biobase)
 library(GEOquery)
 library(edgeR)
 library(biomaRt)
+BiocManager::install("biomaRt")
 
 ```
 
@@ -49,8 +55,9 @@ current_gpl_info <- Meta(getGEO(current_gpl))
 **Last update date:** `r current_gpl_info$last_update_date`\
 **Organism:** `r current_gpl_info$organism`\
 **No. of GEO datasets that use this technology:** `r length(current_gpl_info$series_id)`\
-**No. of GEO samples that use this technology:** `r length(current_gpl_info$sample_id)` \
-### Here we are creating a table to show the groups in our sampling, and showing the 
+**No. of GEO samples that use this technology:** `r length(current_gpl_info$sample_id)`
+
+### Here we are creating a table to show the groups in our sampling.
 ```{r downloading data from GEO query}
 
 sfiles = getGEOSuppFiles('GSE108539')
@@ -67,13 +74,20 @@ rownames(samples) <- c("patients", "sample_number", "time", "sequence_type")
 samples <- data.frame(t(samples))
 samples[1:10, ] # showing first 10 rows.
 ```
-We have **`r nrow(exp_data)` genes** expressed in the dataset. These genes are based on **`r nrow(samples$patients)` samples** from **`r length(unique(samples$patients))` study participants**. Each participant was sampled at 6 times in 4 hour intervals. 
+We have **`r nrow(exp_data)` genes** expressed in the dataset. These genes are based on **`r length(samples$sample_number)` samples** from **`r length(unique(samples$patients))` study participants**. Each participant was sampled at 6 times in 4 hour intervals. 
 
-# Filtering and Normalizing
-The available count data on GEO was already normalized and filtered as described in [1]. The authors of the dataset performed the following pre-processing procedure:\
+# Cleaning, Filtering and Normalizing
+The available count data on GEO was already cleaned, normalized and filtered as described in [1]. The authors of the dataset performed the following pre-processing procedure:\
 1. Transcripts with lower than 3 CPM were removed\
 2. Transcripts that were not aligned were removed\
 3. Scaling factors were determined using the Trimmed M-values method [2] was applied
+
+We will first check if any genes are duplicated based on the ensembl ids provided: 
+```{r}
+summarized_gene_counts <- sort(table(exp_data$Gene_name),decreasing = TRUE)
+length(summarized_gene_counts[which(summarized_gene_counts>1)])
+```
+We find the no duplicates, due to the fact that the data has already been cleaned.
 
 ```{r box plot distribution of data, fig.width=8}
 plot_data = exp_data[, 2:115]
@@ -85,7 +99,6 @@ intron_plot <- boxplot(plot_data_intron, xlab = "Samples", ylab = "log2 CPM",
         cex.axis = 0.5, main = "Box Plot: RNASeq Count Distribution for Intronsic Sequences")
 abline(h = median(apply(plot_data_intron, 2, median)), col = "red", lwd = 0.6, lty = "solid")
 
-
 boxplot(plot_data_exon, xlab = "Samples", ylab = "log2 CPM", 
         las = 2, cex = 0.5, cex.lab = 0.5,
         cex.axis = 0.5, main = "Box Plot: RNASeq Count Distribution for Exonic Sequences") #CHANGE 
@@ -93,7 +106,7 @@ abline(h = median(apply(plot_data_exon, 2, median)), col = "red", lwd = 0.6, lty
 ```
 Both box plots show us a very well normalized set of data. No outliers can be seen from this. A key difference to note here is the difference in medians between intron and exon sequences. 
 
-```{r density plot distribution of data, fig.height=8, fig.width=8}
+```{r density plot distribution of data, fig.height=8}
 counts_density <- apply(exp_data[, 2:115], 2, density)  #calculate the limits across all the samples
 xlim <- 0; ylim <- 0
 for (i in 1:length(counts_density)) {
@@ -117,10 +130,10 @@ legend("right", colnames(plot_data),
 Again we see a similar trend as we did in the box plot. Intron sequences (green lines) are distributed evenly but are quite distinct from exon sequences (blue). 
 ```{r MSD Plot}
 filtered_data_matrix <- as.matrix(exp_data[,2:115])
-# reversing the count values because they a provided in log2()
-reversed_data_matrix <- apply(filtered_data_matrix, 2, function(x) 2^x)
-rownames(reversed_data_matrix) <- exp_data$Gene_name
-d = DGEList(counts=reversed_data_matrix, group=samples$sequence_type)
+# getting the inverse of the count values because the dataset was provided in log2 normalized counts 
+inverse_data_matrix <- apply(filtered_data_matrix, 2, function(x) 2^x)
+rownames(inverse_data_matrix) <- exp_data$Gene_name
+d = DGEList(counts=inverse_data_matrix, group=samples$sequence_type)
 d = calcNormFactors(d)
 normalized_counts <- cpm(d)
 
@@ -128,17 +141,19 @@ plotMDS(d, labels=rownames(samples),
         col = c("darkgreen","blue")[factor(samples$sequence_type)],
         main="Multidimensional Scaling Plot: Distance betweeen Samples")
 ```
-
+From the MDS plot, overall we see the clustering of majority of intron and exon samples. The more interesting pattern is found when observed the samples that are not clustered with the others; we see the y-axis values are similar introns and exon samples with the same participants and time. Hence, there does not seem to be any significant outliers, and we will continue downstream analysis with all samples. 
 
 Next, we will show common vs tagwise dispersion. Dispersion measures the how much our counts deviate from the mean.
 ```{r tagwise dispersion}
-
+d = DGEList(counts=inverse_data_matrix, group=samples$patients)
+d = calcNormFactors(d)
+normalized_counts <- cpm(d)
 model_design <- model.matrix(~samples$patients)
 d <- estimateDisp(d, model_design)
 plotBCV(d,col.tagwise = "black",col.common = "red", main="Common vs Tagwise Dispersion")
 
 ```
-Here we see genes with lower counts tend to have higher variations while the variation decreases with an increase in gene count. An important aspect to this plot is also the large amount of gene with no vairance from 0-8 log CPM. 
+This is not an expected or normal dispersion plot. Typically, the variance should decrease with increase in log CPM, but we have the opposite here. Investigation (reading paper, googling the issue, etc) to correct this was conducted but to no avail. Further investigation will be conducted to understand this. 
 
 Next, we will plot the mean and variance relationship.
 ```{r}
@@ -173,6 +188,8 @@ id_conversion <- getBM(attributes = c("ensembl_gene_id","hgnc_symbol"),
                           mart = ensembl)
 
 ```
+Here we see that there is ensembl_gene_id, exactly what we are looking for. We will use this to map the ensembl ids in our dataset.
+
 Now that we have mapped the genes to HGNC symbols, we will check if there are any ensembl ids that have duplicate HGNC symbols:
 ```{r}
 summarized_gene_counts <- sort(table(id_conversion$hgnc_symbol),decreasing = TRUE)
@@ -187,10 +204,8 @@ This number however does not tell the fully story. We will merge the mappings wi
 ```{r}
 normalized_counts_annot <- merge(id_conversion, exp_data, by.x="ensembl_gene_id", by.y=1, all.y=TRUE)
 normalized_counts_annot[1:8, 1:2]
-
-
 ```
-Based on our merged ensembl ids to hgnc symbols, we will identify the number of genes that did not match: 
+Based on our merged ensembl ids to HGNC symbols, we will identify the number of genes that did not match: 
 ```{r}
 ensembl_id_missing_gene <- normalized_counts_annot$ensembl_gene_id[
   which(is.na(normalized_counts_annot$hgnc_symbol))]
@@ -199,34 +214,12 @@ ensembl_id_missing_gene <- normalized_counts_annot$ensembl_gene_id[
 `r length(ensembl_id_missing_gene)` out of `r nrow(exp_data)` have not been mapped.
 This accounts `r round((length(ensembl_id_missing_gene) / nrow(exp_data)) * 100, 2)`% of the genes that were not identifed. To address the unidentified genes, we will attempt to use a new tool called Biobtree [3]. This is an alternative tool to biomarRt, using a different dataset, hence we may be able to map some more unidentified genes. 
 ```{r}
-# import package                          
-# set a output directory for biobtree files   
-
-
 ensembl_id_missing_list <- strsplit(ensembl_id_missing_gene, " ")
 df <- data.frame(matrix(unlist(ensembl_id_missing_list), 
                         nrow=length(ensembl_id_missing_gene), byrow=T))
 colnames(df) <- c("ensembl_id")
-
-
-#by(df, 1:nrow(df), function(row) {
- # bbSearch(row[1, 1])
-#})
-
-# bbUseOutDir(tempdir())                                                     
-# retrive built-in biobtree database for commonly studied dataset and organism genomes
-# bbStop()
-# start biobtree server              
-# bbStart()     
+mapped_genes <- nrow(exp_data) - length(ensembl_id_missing_gene) - length(duplicated) - 1
 ```
-```{r}
-
-# library(readxl)
-# elife_data <- read_excel("./elife-34114-fig1-data1.xlsx")
-# merged_missing <- merge(df, elife_data, by.x="ensembl_id", by.y="Ensembl_Gene")
-# merged_missing <- merged_missing[, c(1, 132)]
-```
-
 ## Questions
 **What are the control and test conditions of the dataset?** \
 The control condition was skeletal muscle biopsies collected from human samples who were placed under rigid laboratory conditions. Biopsies were taken every 4 hours across a 24 hour period from 10 individuals. The test conditions were performed on cultured human primary skeletal myotubes (hSKM). Though analyzing the cultered data analysis is beyond the scope of the course, there are several groups that the dataset can be clustered into (i.e. by demographic of timepoint) for differential analysis. 
@@ -235,19 +228,23 @@ The control condition was skeletal muscle biopsies collected from human samples 
 I have been engaged in sleep research for the past few years at the level of physiological signals. Given my knowledge and previous experience in the sleep domain, exploring a dataset with biological signals related to sleep and circadian rhythms seemed quite fitting.
 
 **Were there expression values that were not unique for specific genes? How did you handle these?** \ 
+There were `r length(duplicated) - 1` values were each mapped to 2 genes. This is an insignificant amount of replication so we will simply filter both replications of these genes out in downstream analysis. 
 
-**Were there expression values that could not be mapped to current HUGO symbols?**
-Yes there were values that could not be mapped to current HUGO symbols. 
+**Were there expression values that could not be mapped to current HUGO symbols?** \
+Yes there were `r length(ensembl_id_missing_gene)` expression values that could not be mapped to current HUGO symbols. 
 
 **How many outliers were removed?** \
-No outliers were removed. 
+No outliers were removed. There are some potential outliers shown in the MDS plot, but seem consistent enough to consider. We will keep all samples for now as they may reveal important insight in downstream analysis. 
 
 **How did you handle replicates?** \
-There were very few replicates. 3 genes had were replicated 2 times each. This is an insignificant amount of replication so we will simply filter these genes out in downstream analysis. 
+There were no replicates in the dataset provided as it had already been cleaned prior to uploading to GEO. 
 
 **What is the final coverage of your dataset?** \
-`r nrow(exp_data) - length(ensembl_id_missing_gene)` were mapped, accounting for `r ((nrow(exp_data) - length(ensembl_id_missing_gene))/nrow(exp_data))*100`% of the genes in the dataset. 
-
+(1) The dataset provided `r nrow(exp_data)` genes. \
+(2) However, the dataset provided was already pre-filtered according to the conditions described in the Filtering and Normalizing section. \
+(3) We were able to map `r nrow(exp_data) - length(ensembl_id_missing_gene)` ensembl ids to current hgnc symbols. \
+(4) We then identified `r length(duplicated) - 1` genes that were replicated, which will be filtered out downstream. \ 
+Overall, we are left with `r mapped_genes` genes to work with, accounting for `r (mapped_genes/nrow(exp_data))*100`% of the genes in the dataset. Not too bad :)
 
 ## References
 [1]L. Perrin et al., “Transcriptomic analyses reveal rhythmic and CLOCK-driven pathways in human skeletal muscle,” eLife, vol. 7, p. e34114, Apr. 2018, doi: 10.7554/eLife.34114.
