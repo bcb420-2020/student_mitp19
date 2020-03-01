@@ -1,0 +1,179 @@
+---
+title: "BCB420- A2"
+author: "Mit Patel"
+output:
+  html_document:
+    df_print: paged
+---
+### Dataset Information 
+Publication Title: Transcriptomic analyses reveal rhythmic and CLOCK-driven pathways in human skeletal muscle\
+Publication Date: 2018-04-16\
+Publication Journal: eLife\
+GEO ID: GSE108539
+
+
+Temporary way to get the data
+```{r setup, message=FALSE, results='hide'}
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages(pkgs = c("BiocManager","circlize"),
+           repos = "http://cran.rstudio.org",
+           dependencies = TRUE,
+           quiet = TRUE)
+BiocManager::install("ComplexHeatmap")
+library(circlize)
+
+normalized_count_data <- read.csv("data/normalized_counts.csv")
+if (any(names(normalized_count_data) == 'X')) {
+  normalized_count_data <- normalized_count_data[-c(1)]
+}
+```
+First we will setup or data variables:
+```{r}
+
+intron_cols <- grep("Intron.*|ensemble_gene_id|hgnc_symbol*", names(normalized_count_data), value = TRUE)
+exon_cols <- grep("Exon*|ensemble_gene_id|hgnc_symbol", names(normalized_count_data), value = TRUE)
+normalized_count_data_introns <- normalized_count_data[ , intron_cols]
+normalized_count_data_exons <- normalized_count_data[ , exon_cols]
+
+heatmap_matrix <- normalized_count_data[ ,3:ncol(normalized_count_data)]
+rownames(heatmap_matrix) <- normalized_count_data$ensemble_gene_id
+colnames <- colnames(normalized_count_data[ ,3:ncol(normalized_count_data)])
+
+
+heatmap_matrix_intron <- normalized_count_data_introns[ ,3:ncol(normalized_count_data_introns)]
+rownames(heatmap_matrix_intron) <- normalized_count_data_introns$ensemble_gene_id
+colnames <- colnames(normalized_count_data_introns[ ,3:ncol(normalized_count_data_introns)])
+```
+
+First, we will create a heat map matrix
+```{r heatmap}
+# get_heatmap <- function(df) {
+#   heatmap_matrix <- df[ ,3:ncol(df)]
+#   rownames(heatmap_matrix) <- df$ensemble_gene_id
+#   colnames <- colnames(df[ ,3:ncol(df)])  
+#   if(min(heatmap_matrix) == 0){
+#       heatmap_col = colorRamp2(c( 0, max(heatmap_matrix)), c( "white", "red"))
+#     } else {
+#       heatmap_col = colorRamp2(c(min(heatmap_matrix), 0, max(heatmap_matrix)), c("blue", "white", "red"))
+#     }
+#   current_heatmap <- ComplexHeatmap::Heatmap(as.matrix(heatmap_matrix),
+#                                  show_row_dend = TRUE,
+#                                  show_column_dend = TRUE, 
+#                                  col=heatmap_col,
+#                                  show_column_names = TRUE, 
+#                                  show_row_names = FALSE,
+#                                  show_heatmap_legend = TRUE
+#                                  )
+#   current_heatmap
+# }
+# get_heatmap(normalized_count_data_introns)
+# get_heatmap(normalized_count_data_exons)
+
+```
+We cannot clearly see a difference in gene expression across the rows, because these data are not normalized for this conditions. So we will now re-create this heat map, normalizing the counts across the rows. 
+```{r}
+# get_heatmap_normalized <- function(df) {
+#   heatmap_matrix <- df[ ,3:ncol(df)]
+#   rownames(heatmap_matrix) <- df$ensemble_gene_id
+#   colnames <- colnames(df[ ,3:ncol(df)])  
+#   heatmap_matrix <- t(scale(t(heatmap_matrix)))
+#   if(min(heatmap_matrix) == 0){
+#       heatmap_col = colorRamp2(c( 0, max(heatmap_matrix)), c( "white", "red"))
+#     } else {
+#       heatmap_col = colorRamp2(c(min(heatmap_matrix), 0, max(heatmap_matrix)), c("blue", "white", "red"))
+#     }
+#   current_heatmap <- ComplexHeatmap::Heatmap(as.matrix(heatmap_matrix),
+#                                  show_row_dend = TRUE,
+#                                  show_column_dend = TRUE, 
+#                                  col=heatmap_col,
+#                                  show_column_names = TRUE, 
+#                                  show_row_names = FALSE,
+#                                  show_heatmap_legend = TRUE
+#                                  )
+#   current_heatmap
+# }
+# get_heatmap_normalized(normalized_count_data_introns)
+# get_heatmap_normalized(normalized_count_data_exons)
+```
+
+
+```{r}
+gene_of_interest <- which(normalized_count_data_introns$hgnc_symbol == "CLOCK")
+participants <- c("Intron_15", "Intron_3", "Intron_2","Intron_6", "Intron_7", "Intron_9", "Intron_13", "Intron_4", "Intron_12", "Intron_1")
+timepoint_clock_matrix <- matrix(nrow=10, ncol=0)
+row.names(timepoint_clock_matrix) <- participants
+create_timepoint_matrix <- function(grep_pattern, timepoint) {
+  tp <- grep(colnames(normalized_count_data_introns),
+                          pattern=grep_pattern)
+  m <- (t(normalized_count_data_introns
+                       [gene_of_interest, tp]))
+  temp_rownames <- strsplit(rownames(m), " ")
+  new_rownames <- lapply(temp_rownames, function(x) {
+    new_name <- unlist(strsplit(x, "_"))[1:2]
+    new_name <- paste(new_name[1], new_name[2], sep="_")
+    return(new_name)
+  })
+  colnames(m) <- c(timepoint)
+  row.names(m) <- new_rownames
+  return(m)
+}
+t1 <- create_timepoint_matrix("Intron.*_12.00", "12.00")
+t2 <- create_timepoint_matrix("Intron.*_16.00", "16.00")
+t3 <- create_timepoint_matrix("Intron.*_20.00", "20.00")
+t4 <- create_timepoint_matrix("Intron.*_00.00", "00.00")
+t5 <- create_timepoint_matrix("Intron.*_04.00", "04.00")
+t6 <- create_timepoint_matrix("Intron.*_08.00", "08.00")
+matricies <- list(t1, t2, t3, t4, t5, t6)
+for (l in matricies) {
+  timepoint_clock_matrix <- cbind(timepoint_clock_matrix, l[, 1][match(rownames(timepoint_clock_matrix), rownames(l))])
+}
+colnames(timepoint_clock_matrix) <- c("12.00", "16.00", "20.00", "00.00", "04.00", "08.00")
+timepoint_clock_matrix
+```
+To compare the CLOCK gene across our timepoint groups, we will perform an ANOVA.
+```{r}
+df <- data.frame()
+for (col in 1:ncol(timepoint_clock_matrix)) {
+  values <- as.data.frame(timepoint_clock_matrix[col, ])
+  timepoints <- rep(c(colnames(timepoint_clock_matrix)[col]), 6)
+  values <- cbind(values, timepoints)
+  colnames(values) <- c("values", "timepoints")
+  rownames(values) <- NULL
+  df <- rbind(df, values)
+}
+
+```
+
+```{r}
+gene_of_interest <- which(normalized_count_data_introns$hgnc_symbol == "CLOCK")
+
+
+```
+
+Here we revisit the MDS plot developed in A1, but using the limma package. Again, we notice For the most part, samples in the intron and exon class cluster together with some outliers away from the 2 main clustering sites. 
+```{r}
+pat_colors <- rainbow(10)
+pat_colors <- unlist(lapply(pat_colors,FUN=function(x){rep(x,2)}))
+limma::plotMDS(heatmap_matrix_intron,
+               col = pat_colors)
+```
+
+In the study related to the dataset, they are looking at which genes are expressed at the 6 different timepoints to get a sense of the genes involved in the human circadian rhythm. 
+
+Here, we will fit our data from each time point to a linear model. To do this, we will first we will segegrate our patient samples intro groups by patient and timepoint of sample.
+
+```{r}
+samples <- data.frame(
+        lapply(colnames(normalized_count_data_introns)[3:ncol(normalized_count_data_introns)], 
+        FUN=function(x){
+          unlist(strsplit(x, split = "_"))[c(2,4)]}))
+colnames(samples) <- colnames(normalized_count_data_introns)[3:ncol(normalized_count_data_introns)]
+rownames(samples) <- c("patient","timepoint")
+samples <- data.frame(t(samples))
+samples[1:5, ]
+
+```
+
+```{r}
+```
+
