@@ -5,11 +5,15 @@ output:
   html_document:
     df_print: paged
 ---
-### Dataset Information 
+### Dataset Information:
 Publication Title: Transcriptomic analyses reveal rhythmic and CLOCK-driven pathways in human skeletal muscle\
 Publication Date: 2018-04-16\
 Publication Journal: eLife\
 GEO ID: GSE108539
+
+### Previous Analysis Overview: 
+
+### Analysis Objectives: 
 
 
 Temporary way to get the data
@@ -20,7 +24,11 @@ if (!requireNamespace("BiocManager", quietly = TRUE))
            dependencies = TRUE,
            quiet = TRUE)
 BiocManager::install("ComplexHeatmap")
+BiocManager::install("limma")
+
+library(Biobase)
 library(circlize)
+library(limma)
 
 normalized_count_data <- read.csv("data/normalized_counts.csv")
 if (any(names(normalized_count_data) == 'X')) {
@@ -30,8 +38,8 @@ if (any(names(normalized_count_data) == 'X')) {
 First we will setup or data variables:
 ```{r}
 
-intron_cols <- grep("Intron.*|ensemble_gene_id|hgnc_symbol*", names(normalized_count_data), value = TRUE)
-exon_cols <- grep("Exon*|ensemble_gene_id|hgnc_symbol", names(normalized_count_data), value = TRUE)
+intron_cols <- grep("Intron.*|ensembl_gene_id|hgnc_symbol*", names(normalized_count_data), value = TRUE)
+exon_cols <- grep("Exon*|ensembl_gene_id|hgnc_symbol", names(normalized_count_data), value = TRUE)
 normalized_count_data_introns <- normalized_count_data[ , intron_cols]
 normalized_count_data_exons <- normalized_count_data[ , exon_cols]
 
@@ -130,20 +138,22 @@ for (l in matricies) {
 colnames(timepoint_clock_matrix) <- c("12.00", "16.00", "20.00", "00.00", "04.00", "08.00")
 timepoint_clock_matrix
 ```
-To compare the CLOCK gene across our timepoint groups, we will perform an ANOVA.
+To compare the CLOCK gene across our timepoint groups, we will perform an ANOVA as we have more than 2 groups in the data.
 ```{r}
-df <- data.frame()
+df_clock_timepoint <- data.frame()
 for (col in 1:ncol(timepoint_clock_matrix)) {
   values <- as.data.frame(timepoint_clock_matrix[col, ])
   timepoints <- rep(c(colnames(timepoint_clock_matrix)[col]), 6)
   values <- cbind(values, timepoints)
   colnames(values) <- c("values", "timepoints")
   rownames(values) <- NULL
-  df <- rbind(df, values)
+  df_clock_timepoint <- rbind(df_clock_timepoint, values)
 }
-
+df_clock_timepoint[1:5, ]
+aov_clock <- aov(df_clock_timepoint$values ~ df_clock_timepoint$timepoints)
+summary(aov_clock)
 ```
-
+Our P value is >0.05, hence we equal variance between the timepoints. 
 ```{r}
 gene_of_interest <- which(normalized_count_data_introns$hgnc_symbol == "CLOCK")
 
@@ -173,7 +183,69 @@ samples <- data.frame(t(samples))
 samples[1:5, ]
 
 ```
-
+We will now create our model design. 
 ```{r}
+model_design <- model.matrix(~ samples$timepoint)
+model_design[1:5, 1:6]
 ```
+Now we will our create our data matrix to apply the model to:
+```{r}
+expressionMatrix <- as.matrix(normalized_count_data_introns[,3:ncol(normalized_count_data_introns)])
+rownames(expressionMatrix) <- normalized_count_data_introns$ensembl_gene_id
+colnames(expressionMatrix) <- colnames(normalized_count_data_introns)[3:ncol(normalized_count_data_introns)]
+minimalSet <- ExpressionSet(assayData=expressionMatrix)
+fit <- lmFit(minimalSet, model_design)
+fit2 <- eBayes(fit, trend=TRUE)
+topfit <- topTable(fit2, 
+                   coef=ncol(model_design),
+                   adjust.method = "BH",
+                   number = nrow(expressionMatrix))
+#merge hgnc names to topfit table
+output_hits <- merge(normalized_count_data_introns[,1:2],
+                     topfit,
+                     by.y=0,by.x=1,
+                     all.y=TRUE)
+#sort by pvalue
+output_hits <- output_hits[order(output_hits$P.Value),]
+
+output_hits[1:5, ]
+
+genes_pass <- length(which(output_hits$P.Value < 0.05))
+genes_pass_correction <- length(which(output_hits$adj.P.Val < 0.05))
+```
+We have `r genes_pass` genes that pass the p-value threshold of <0.05.
+Further, we have `r genes_pass_correction` genes that pass the corrected P value threshold. 
+
+We have a sizeable amount of genes that pass the p-value threshold of 0.05, so we will represent these genes that passed through a heatmap. 
+```{r}
+heatmap_matrix_new <- normalized_count_data_introns[,3:ncol(normalized_count_data_introns)]
+rownames(heatmap_matrix_new) <- normalized_count_data_introns$ensembl_gene_id
+colnames(heatmap_matrix_new) <- colnames(normalized_count_data_introns[,3:ncol(normalized_count_data_introns)])
+heatmap_matrix_new <- t(scale(t(heatmap_matrix_new)))
+
+top_hits <- output_hits$ensembl_gene_id[output_hits$P.Value<0.05]
+heatmap_matrix_tophits <- t(
+  scale(t(heatmap_matrix_new[
+    which(rownames(heatmap_matrix_new) %in% top_hits),])))
+
+
+if(min(heatmap_matrix_tophits) == 0){
+    heatmap_col = colorRamp2(c( 0, max(heatmap_matrix_tophits)), 
+                             c( "white", "red"))
+  } else {
+    heatmap_col = colorRamp2(c(min(heatmap_matrix_tophits), 0, max(heatmap_matrix_tophits)), c("blue", "white", "red"))
+  }
+heatmap_matrix_tophits(order(heatmap_matrix_tophits$))
+current_heatmap <- ComplexHeatmap::Heatmap(as.matrix(heatmap_matrix_tophits),
+                           cluster_rows = TRUE,
+                           cluster_columns = TRUE,
+                               show_row_dend = TRUE,
+                               show_column_dend = TRUE, 
+                               show_column_names = TRUE, 
+                               show_row_names = FALSE,
+                               show_heatmap_legend = TRUE
+                               )
+current_heatmap
+```
+
 
