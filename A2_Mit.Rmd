@@ -7,14 +7,13 @@ output:
 ---
 # Results from A1
 We will nest our A1 document in this notebook to continue our analysis.  
-```{r nest a1, message=FALSE, warning=FALSE, child='a1.Rmd', include=FALSE, results='hide'}
+```{r nest a1, message=FALSE, warning=FALSE, child='a1.Rmd', include=FALSE, eval=TRUE}
 
 ```
----
 
 # A2 starts here
 #### Data Overview: 
-The dataset being used in this analysis is based on what is published in [1].
+The dataset being used in this analysis is based on what is published in [1]. The dataset samples 
 #### Analysis Objectives: 
 
 First we will install the necessary packages: 
@@ -67,10 +66,14 @@ colnames <- colnames(normalized_count_data[ ,3:ncol(normalized_count_data)])
 heatmap_matrix_intron <- normalized_count_data_introns[ ,3:ncol(normalized_count_data_introns)]
 rownames(heatmap_matrix_intron) <- normalized_count_data_introns$ensemble_gene_id
 colnames <- colnames(normalized_count_data_introns[ ,3:ncol(normalized_count_data_introns)])
+
+heatmap_matrix_exon <- normalized_count_data_exons[ ,3:ncol(normalized_count_data_exons)]
+rownames(heatmap_matrix_intron) <- normalized_count_data_exons$ensemble_gene_id
+colnames <- colnames(normalized_count_data_exons[ ,3:ncol(normalized_count_data_exons)])
 ```
 
-First, we will create a heat map matrix
-```{r heatmap}
+Note: Code for Heatmap matrix for unthresholded dataset is commented out and hidden as it takes too long to execture. 
+```{r heatmap prefilter, echo=FALSE}
 # get_heatmap <- function(df) {
 #   heatmap_matrix <- df[ ,3:ncol(df)]
 #   rownames(heatmap_matrix) <- df$ensemble_gene_id
@@ -95,7 +98,7 @@ First, we will create a heat map matrix
 
 ```
 We cannot clearly see a difference in gene expression across the rows, because these data are not normalized for this conditions. So we will now re-create this heat map, normalizing the counts across the rows. 
-```{r }
+```{r heatmap normalized prefilter, echo=FALSE}
 # get_heatmap_normalized <- function(df) {
 #   heatmap_matrix <- df[ ,3:ncol(df)]
 #   rownames(heatmap_matrix) <- df$ensemble_gene_id
@@ -122,14 +125,14 @@ We cannot clearly see a difference in gene expression across the rows, because t
 
 
 ```{r}
-gene_of_interest <- which(normalized_count_data_introns$hgnc_symbol == "CLOCK")
-participants <- c("Intron_15", "Intron_3", "Intron_2","Intron_6", "Intron_7", "Intron_9", "Intron_13", "Intron_4", "Intron_12", "Intron_1")
+gene_of_interest <- which(normalized_count_data_exons$hgnc_symbol == "CLOCK")
+participants <- c("Exon_15", "Exon_3", "Exon_2","Exon_6", "Exon_7", "Exon_9", "Exon_13", "Exon_4", "Exon_12", "Exon_1")
 timepoint_clock_matrix <- matrix(nrow=10, ncol=0)
 row.names(timepoint_clock_matrix) <- participants
 create_timepoint_matrix <- function(grep_pattern, timepoint) {
-  tp <- grep(colnames(normalized_count_data_introns),
+  tp <- grep(colnames(normalized_count_data_exons),
                           pattern=grep_pattern)
-  m <- (t(normalized_count_data_introns
+  m <- (t(normalized_count_data_exons
                        [gene_of_interest, tp]))
   temp_rownames <- strsplit(rownames(m), " ")
   new_rownames <- lapply(temp_rownames, function(x) {
@@ -141,12 +144,12 @@ create_timepoint_matrix <- function(grep_pattern, timepoint) {
   row.names(m) <- new_rownames
   return(m)
 }
-t1 <- create_timepoint_matrix("Intron.*_12.00", "12.00")
-t2 <- create_timepoint_matrix("Intron.*_16.00", "16.00")
-t3 <- create_timepoint_matrix("Intron.*_20.00", "20.00")
-t4 <- create_timepoint_matrix("Intron.*_00.00", "00.00")
-t5 <- create_timepoint_matrix("Intron.*_04.00", "04.00")
-t6 <- create_timepoint_matrix("Intron.*_08.00", "08.00")
+t1 <- create_timepoint_matrix("Exon.*_12.00", "12.00")
+t2 <- create_timepoint_matrix("Exon.*_16.00", "16.00")
+t3 <- create_timepoint_matrix("Exon.*_20.00", "20.00")
+t4 <- create_timepoint_matrix("Exon.*_00.00", "00.00")
+t5 <- create_timepoint_matrix("Exon.*_04.00", "04.00")
+t6 <- create_timepoint_matrix("Exon.*_08.00", "08.00")
 matricies <- list(t1, t2, t3, t4, t5, t6)
 for (l in matricies) {
   timepoint_clock_matrix <- cbind(timepoint_clock_matrix, l[, 1][match(rownames(timepoint_clock_matrix), rownames(l))])
@@ -170,17 +173,12 @@ aov_clock <- aov(df_clock_timepoint$values ~ df_clock_timepoint$timepoints)
 summary(aov_clock)
 ```
 Our P value is >0.05, hence we equal variance between the timepoints. 
-```{r}
-gene_of_interest <- which(normalized_count_data_introns$hgnc_symbol == "CLOCK")
-
-
-```
 
 Here we revisit the MDS plot developed in A1, but using the limma package. Again, we notice For the most part, samples in the intron and exon class cluster together with some outliers away from the 2 main clustering sites. 
 ```{r}
 pat_colors <- rainbow(10)
 pat_colors <- unlist(lapply(pat_colors,FUN=function(x){rep(x,2)}))
-limma::plotMDS(heatmap_matrix_intron,
+limma::plotMDS(heatmap_matrix_exon,
                col = pat_colors)
 ```
 
@@ -190,25 +188,25 @@ Here, we will fit our data from each time point to a linear model. To do this, w
 
 ```{r}
 samples <- data.frame(
-        lapply(colnames(normalized_count_data_introns)[3:ncol(normalized_count_data_introns)], 
+        lapply(colnames(normalized_count_data_exons)[3:ncol(normalized_count_data_exons)], 
         FUN=function(x){
           unlist(strsplit(x, split = "_"))[c(2,4)]}))
-colnames(samples) <- colnames(normalized_count_data_introns)[3:ncol(normalized_count_data_introns)]
+colnames(samples) <- colnames(normalized_count_data_exons)[3:ncol(normalized_count_data_exons)]
 rownames(samples) <- c("patient","timepoint")
 samples <- data.frame(t(samples))
 samples[1:5, ]
 
 ```
-We will now create our model design. 
+We will now create our model design. We have 6 different timepoints where data was collected, and so will we design our model to account for this. 
 ```{r}
 model_design <- model.matrix(~ samples$timepoint)
 model_design[1:5, 1:6]
 ```
 Now we will our create our data matrix to apply the model to:
 ```{r}
-expressionMatrix <- as.matrix(normalized_count_data_introns[,3:ncol(normalized_count_data_introns)])
-rownames(expressionMatrix) <- normalized_count_data_introns$ensembl_gene_id
-colnames(expressionMatrix) <- colnames(normalized_count_data_introns)[3:ncol(normalized_count_data_introns)]
+expressionMatrix <- as.matrix(normalized_count_data_exons[,3:ncol(normalized_count_data_exons)])
+rownames(expressionMatrix) <- normalized_count_data_exons$ensembl_gene_id
+colnames(expressionMatrix) <- colnames(normalized_count_data_exons)[3:ncol(normalized_count_data_exons)]
 minimalSet <- ExpressionSet(assayData=expressionMatrix)
 fit <- lmFit(minimalSet, model_design)
 fit2 <- eBayes(fit, trend=TRUE)
@@ -217,7 +215,7 @@ topfit <- topTable(fit2,
                    adjust.method = "BH",
                    number = nrow(expressionMatrix))
 #merge hgnc names to topfit table
-output_hits <- merge(normalized_count_data_introns[,1:2],
+output_hits <- merge(normalized_count_data_exons[,1:2],
                      topfit,
                      by.y=0,by.x=1,
                      all.y=TRUE)
@@ -233,10 +231,16 @@ We have `r genes_pass` genes that pass the p-value threshold of <0.05.
 Further, we have `r genes_pass_correction` genes that pass the corrected P value threshold. 
 
 We have a sizeable amount of genes that pass the p-value threshold of 0.05, so we will represent these genes that passed through a heatmap. 
+
 ```{r}
-heatmap_matrix_new <- normalized_count_data_introns[,3:ncol(normalized_count_data_introns)]
-rownames(heatmap_matrix_new) <- normalized_count_data_introns$ensembl_gene_id
-colnames(heatmap_matrix_new) <- colnames(normalized_count_data_introns[,3:ncol(normalized_count_data_introns)])
+# plotMD(fit2,coef=1)
+
+```
+
+```{r}
+heatmap_matrix_new <- normalized_count_data_exons[,3:ncol(normalized_count_data_exons)]
+rownames(heatmap_matrix_new) <- normalized_count_data_exons$ensembl_gene_id
+colnames(heatmap_matrix_new) <- colnames(normalized_count_data_exons[,3:ncol(normalized_count_data_exons)])
 heatmap_matrix_new <- t(scale(t(heatmap_matrix_new)))
 
 top_hits <- output_hits$ensembl_gene_id[output_hits$P.Value<0.05]
@@ -272,8 +276,8 @@ Now we will continue our differential analysis to see differential expression us
 First we will get our filtered count data from A1 and create our Quasi liklihood model. 
 ASK HERE WHAT COEF TO CHOOSE WITH MULTIPLE GROUPS...
 ```{r}
-intron_data_matrix <- inverse_data_matrix[ , grepl("Intron.*", colnames(inverse_data_matrix))]
-d = DGEList(counts=intron_data_matrix, group=samples$timepoint)
+exon_data_matrix <- inverse_data_matrix[ , grepl("Exon.*", colnames(inverse_data_matrix))]
+d = DGEList(counts=exon_data_matrix, group=samples$timepoint)
 d <- estimateDisp(d, model_design)
 fit <- glmQLFit(d, model_design)
 model_design[1:10, 1:5]
@@ -313,8 +317,8 @@ plot(two_models_pvalues$qlf_patient_pvalue,
 
 ```
 ```{r}
-ensembl_of_interest <- normalized_count_data_introns$ensembl_gene_id[
-  which(normalized_count_data_introns$hgnc_symbol == "CLOCK")]
+ensembl_of_interest <- normalized_count_data_exons$ensembl_gene_id[
+  which(normalized_count_data_exons$hgnc_symbol == "CLOCK")]
 two_models_pvalues$colour <- "grey"
 two_models_pvalues$colour[two_models_pvalues$ensembl_id==ensembl_of_interest] <- "red"
 plot(two_models_pvalues$qlf_patient_pvalue,
@@ -400,7 +404,9 @@ gostres_downreg <- gprofiler2::gost(downregulated_genes, organism = "hsapiens", 
   domain_scope = c("annotated"), custom_bg = NULL,
   numeric_ns = "", sources = NULL)
 ```
+
 ### Manhattan Plot: Upregulated Genes
+
 ```{r}
 gprofiler2::gostplot(gostres_upreg, capped = TRUE, interactive = TRUE, pal = c(`GO:MF`
   = "#dc3912", `GO:BP` = "#ff9900", `GO:CC` = "#109618", KEGG = "#dd4477",
@@ -426,6 +432,7 @@ gprofiler2::gostplot(gostres_downreg, capped = TRUE, interactive = TRUE, pal = c
 4. Run the analysis using the up-regulated set of genes, and the down-regulated set of genes separately. How do these results compare to using the whole list (i.e all differentially expressed genes 5. together vs. the up-regulated and down regulated differentially expressed genes separately)?
 6. Do the over-representation results support conclusions or mechanism discussed in the original paper?
 7. Can you find evidence, i.e. publications, to support some of the results that you see. How does this evidence support your results.
-\
+
+
 ## References
 [1] L. Perrin et al., “Transcriptomic analyses reveal rhythmic and CLOCK-driven pathways in human skeletal muscle,” eLife, vol. 7, p. e34114, Apr. 2018, doi: 10.7554/eLife.34114.
