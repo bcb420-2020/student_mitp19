@@ -95,7 +95,7 @@ First, we will create a heat map matrix
 
 ```
 We cannot clearly see a difference in gene expression across the rows, because these data are not normalized for this conditions. So we will now re-create this heat map, normalizing the counts across the rows. 
-```{r}
+```{r }
 # get_heatmap_normalized <- function(df) {
 #   heatmap_matrix <- df[ ,3:ncol(df)]
 #   rownames(heatmap_matrix) <- df$ensemble_gene_id
@@ -384,12 +384,38 @@ We have identified `r {n_upreg_genes}` upregulated genes and `r {n_downreg_genes
 
 ## Enrichment Analysis
 ```{r}
+gostres_upreg <- gprofiler2::gost(upregulated_genes, organism = "hsapiens", ordered_query = FALSE,
+  multi_query = FALSE, significant = TRUE, exclude_iea = TRUE,
+  measure_underrepresentation = FALSE, evcodes = FALSE,
+  user_threshold = 0.05, correction_method = c("g_SCS", "bonferroni",
+  "fdr", "false_discovery_rate", "gSCS", "analytical"),
+  domain_scope = c("annotated"), custom_bg = NULL,
+  numeric_ns = "", sources = NULL)
 
-gostres <- gprofiler2::gorth(upregulated_genes, source_organism = "hsapiens",
-  target_organism = "hsapiens", numeric_ns = "", mthreshold = Inf,
-  filter_na = TRUE)
+gostres_downreg <- gprofiler2::gost(downregulated_genes, organism = "hsapiens", ordered_query = FALSE,
+  multi_query = FALSE, significant = TRUE, exclude_iea = TRUE,
+  measure_underrepresentation = FALSE, evcodes = FALSE,
+  user_threshold = 0.05, correction_method = c("g_SCS", "bonferroni",
+  "fdr", "false_discovery_rate", "gSCS", "analytical"),
+  domain_scope = c("annotated"), custom_bg = NULL,
+  numeric_ns = "", sources = NULL)
+```
+### Manhattan Plot: Upregulated Genes
+```{r}
+gprofiler2::gostplot(gostres_upreg, capped = TRUE, interactive = TRUE, pal = c(`GO:MF`
+  = "#dc3912", `GO:BP` = "#ff9900", `GO:CC` = "#109618", KEGG = "#dd4477",
+  REAC = "#3366cc", WP = "#0099c6", TF = "#5574a6", MIRNA = "#22aa99", HPA
+  = "#6633cc", CORUM = "#66aa00", HP = "#990099"))
+```
+### Manhattan Plot: Downregulated Genes
+```{r}
+gprofiler2::gostplot(gostres_downreg, capped = TRUE, interactive = TRUE, pal = c(`GO:MF`
+  = "#dc3912", `GO:BP` = "#ff9900", `GO:CC` = "#109618", KEGG = "#dd4477",
+  REAC = "#3366cc", WP = "#0099c6", TF = "#5574a6", MIRNA = "#22aa99", HPA
+  = "#6633cc", CORUM = "#66aa00", HP = "#990099"))
+```
 
-gprofiler2::gostplot(gostres)
+```{r}
 
 ```
 
@@ -400,5 +426,6 @@ gprofiler2::gostplot(gostres)
 4. Run the analysis using the up-regulated set of genes, and the down-regulated set of genes separately. How do these results compare to using the whole list (i.e all differentially expressed genes 5. together vs. the up-regulated and down regulated differentially expressed genes separately)?
 6. Do the over-representation results support conclusions or mechanism discussed in the original paper?
 7. Can you find evidence, i.e. publications, to support some of the results that you see. How does this evidence support your results.
+\
 ## References
 [1] L. Perrin et al., “Transcriptomic analyses reveal rhythmic and CLOCK-driven pathways in human skeletal muscle,” eLife, vol. 7, p. e34114, Apr. 2018, doi: 10.7554/eLife.34114.
