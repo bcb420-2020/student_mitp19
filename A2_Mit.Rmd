@@ -13,7 +13,7 @@ We will nest our A1 document in this notebook to continue our analysis.
 
 # A2 starts here
 #### Data Overview: 
-The dataset being used in this analysis is based on what is published in [1]. The dataset samples 
+The dataset being used in this analysis is based on what is published in [1]. The dataset samples 10 participants at 6 different timepoints including during the day and during the night (while they were asleep) to get an idea of the key genes involved in circ
 #### Analysis Objectives: 
 
 First we will install the necessary packages: 
@@ -97,7 +97,6 @@ Note: Code for Heatmap matrix for unthresholded dataset is commented out and hid
 # get_heatmap(normalized_count_data_exons)
 
 ```
-We cannot clearly see a difference in gene expression across the rows, because these data are not normalized for this conditions. So we will now re-create this heat map, normalizing the counts across the rows. 
 ```{r heatmap normalized prefilter, echo=FALSE}
 # get_heatmap_normalized <- function(df) {
 #   heatmap_matrix <- df[ ,3:ncol(df)]
@@ -181,6 +180,7 @@ pat_colors <- unlist(lapply(pat_colors,FUN=function(x){rep(x,2)}))
 limma::plotMDS(heatmap_matrix_exon,
                col = pat_colors)
 ```
+Typically, our sampels cluster together, though we have 4 outliers to the right of the graph.
 
 In the study related to the dataset, they are looking at which genes are expressed at the 6 different timepoints to get a sense of the genes involved in the human circadian rhythm. 
 
@@ -197,12 +197,12 @@ samples <- data.frame(t(samples))
 samples[1:5, ]
 
 ```
-We will now create our model design. We have 6 different timepoints where data was collected, and so will we design our model to account for this. 
+We will now create our model design. We have 6 different timepoints where data was collected, and so will we design the model to account for this. 
 ```{r}
 model_design <- model.matrix(~ samples$timepoint)
 model_design[1:5, 1:6]
 ```
-Now we will our create our data matrix to apply the model to:
+Now we will our create our data matrix to apply the model to and get the P-values for our genes. 
 ```{r}
 expressionMatrix <- as.matrix(normalized_count_data_exons[,3:ncol(normalized_count_data_exons)])
 rownames(expressionMatrix) <- normalized_count_data_exons$ensembl_gene_id
@@ -214,12 +214,13 @@ topfit <- topTable(fit2,
                    coef=ncol(model_design),
                    adjust.method = "BH",
                    number = nrow(expressionMatrix))
-#merge hgnc names to topfit table
+
+#merge hgnc symboles to the topfit table
 output_hits <- merge(normalized_count_data_exons[,1:2],
                      topfit,
                      by.y=0,by.x=1,
                      all.y=TRUE)
-#sort by pvalue
+#sort the output lists by decreasing pvaluee
 output_hits <- output_hits[order(output_hits$P.Value),]
 
 output_hits[1:5, ]
@@ -230,13 +231,20 @@ genes_pass_correction <- length(which(output_hits$adj.P.Val < 0.05))
 We have `r genes_pass` genes that pass the p-value threshold of <0.05.
 Further, we have `r genes_pass_correction` genes that pass the corrected P value threshold. 
 
-We have a sizeable amount of genes that pass the p-value threshold of 0.05, so we will represent these genes that passed through a heatmap. 
+We have a sizeable amount of genes that pass the p-value threshold of 0.05, so we will represent these genes that passed through an MA plot and a heatmap. 
 
 ```{r}
-# plotMD(fit2,coef=1)
+xlim <- c(-3,1)
+ylim <- c(-4,4)
+passed_genes <- topfit[which(topfit$P.Value<0.05), ]
+not_passed_genes <- topfit[which(topfit$P.Value>=0.05), ]
+limma::plotMA(topfit, main="MA Plot: Passed Threshold Genes", ylim=ylim, xlim=xlim)
+limma::plotMA(not_passed_genes, main="MA Plot: Other Genes", ylim=ylim, xlim=xlim)
 
 ```
+As we can see the difference in the 2 plots, the p-value of 0.05 filters out a significant number of outliers. 
 
+We will now create a heatmap based on the thresholded gene list. 
 ```{r}
 heatmap_matrix_new <- normalized_count_data_exons[,3:ncol(normalized_count_data_exons)]
 rownames(heatmap_matrix_new) <- normalized_count_data_exons$ensembl_gene_id
@@ -269,12 +277,11 @@ current_heatmap <- ComplexHeatmap::Heatmap(as.matrix(heatmap_matrix_tophits),
                                )
 current_heatmap
 ```
-INSERT ANALYSIS OF HEATMAP HERE.
+We see significant more expression on the left and very right ends of this heatp. Looking at these time points, they are typically 0:00, 4:00, and 8:00, times that these participants were likely asleep. 
 
 Now we will continue our differential analysis to see differential expression using a different model, the Quasi liklihood model. \
 \
-First we will get our filtered count data from A1 and create our Quasi liklihood model. 
-ASK HERE WHAT COEF TO CHOOSE WITH MULTIPLE GROUPS...
+First we will get our filtered count data from A1 and create our Quasi liklihood model and show the head of the model. 
 ```{r}
 exon_data_matrix <- inverse_data_matrix[ , grepl("Exon.*", colnames(inverse_data_matrix))]
 d = DGEList(counts=exon_data_matrix, group=samples$timepoint)
@@ -284,6 +291,8 @@ model_design[1:10, 1:5]
 qlf.pos_vs_neg <- glmQLFTest(fit)
 topTags(qlf.pos_vs_neg)
 ```
+
+Next, we will look at how many genes pass the thresholds with the Quasi. 
 ```{r}
 qlf_output_hits <- topTags(qlf.pos_vs_neg,sort.by = "PValue",
                            n = nrow(normalized_count_data))
@@ -291,9 +300,9 @@ quasi_pvalue_pass <- length(which(qlf_output_hits$table$PValue < 0.05))
 quasi_corrected_pass <- length(which(qlf_output_hits$table$FDR < 0.05))
 
 ```
-With the Quasi-liklihood model, `r quasi_pvalue_pass` genes pass the threshold p-value <0.05 and `r quasi_corrected_pass` pass the correction.\
-\
-Next we will compare the different models we generated (Limma vs Quasi liklihood)
+With the Quasi-liklihood model, `r quasi_pvalue_pass` genes pass the threshold p-value <0.05 and `r quasi_corrected_pass` pass the correction.
+
+Next we will compare the different models we generated (Limma vs Quasi liklihood).
 ```{r}
 qlf_pat_model_pvalues <- data.frame(
           ensembl_id = rownames(qlf_output_hits$table),
@@ -316,6 +325,8 @@ plot(two_models_pvalues$qlf_patient_pvalue,
      main="QLF vs Limma")
 
 ```
+As we can see, there is a small overlap between the two models, shown in red. Blue points represent genes overexpressed only in the Quasi model and yellow represent the genes overpressed only in the limma model. 
+We will highlight some genes of interest, known to contribute to circadian rythym as described in [1].
 ```{r}
 ensembl_of_interest <- normalized_count_data_exons$ensembl_gene_id[
   which(normalized_count_data_exons$hgnc_symbol == "CLOCK")]
@@ -331,6 +342,7 @@ points(two_models_pvalues[
   two_models_pvalues$ensembl_id==ensembl_of_interest,2:3],
        pch=24,  col="red", cex=1.5)
 ```
+The red triangles are our genes of interest. We can see that our genes of interest strong correlation of expression in both models.
 
 Now we will generate a heatmap for the Quasi Likelihood model. 
 ```{r}
@@ -366,7 +378,7 @@ qlf_output_hits_withgn[,"rank"] <- -log(qlf_output_hits_withgn$PValue,base =10) 
 qlf_output_hits_withgn <- qlf_output_hits_withgn[order(qlf_output_hits_withgn$rank),]
 
 upregulated_genes <- qlf_output_hits_withgn$hgnc_symbol[
-  which(qlf_output_hits_withgn$PValue < 0.40 
+  which(qlf_output_hits_withgn$PValue < 0.05
              & qlf_output_hits_withgn$logFC > 0)]
 downregulated_genes <- qlf_output_hits_withgn$hgnc_symbol[
   which(qlf_output_hits_withgn$PValue < 0.05 
@@ -374,19 +386,11 @@ downregulated_genes <- qlf_output_hits_withgn$hgnc_symbol[
 
 n_upreg_genes <- length(upregulated_genes)
 n_downreg_genes <- length(downregulated_genes)
-
-
-write.table(x=upregulated_genes,
-            file=file.path("data","upregulated_genes.txt"),sep = "\t",
-            row.names = FALSE,col.names = FALSE,quote = FALSE)
-write.table(x=downregulated_genes,
-            file=file.path("data","downregulated_genes.txt"),sep = "\t",
-            row.names = FALSE,col.names = FALSE,quote = FALSE)
-
 ```
 We have identified `r {n_upreg_genes}` upregulated genes and `r {n_downreg_genes}` downregulated genes to be used in our gene enrichment analysis. 
 
 ## Enrichment Analysis
+We will use the gprofiler package to a do a preliminary gene set analysis. We will perform a query with our upregulated genes and then our downregulated genes. 
 ```{r}
 gostres_upreg <- gprofiler2::gost(upregulated_genes, organism = "hsapiens", ordered_query = FALSE,
   multi_query = FALSE, significant = TRUE, exclude_iea = TRUE,
@@ -403,36 +407,58 @@ gostres_downreg <- gprofiler2::gost(downregulated_genes, organism = "hsapiens", 
   "fdr", "false_discovery_rate", "gSCS", "analytical"),
   domain_scope = c("annotated"), custom_bg = NULL,
   numeric_ns = "", sources = NULL)
+
+gostres_upreg$result
 ```
 
-### Manhattan Plot: Upregulated Genes
-
+#### Manhattan Plot: Upregulated Genes
 ```{r}
 gprofiler2::gostplot(gostres_upreg, capped = TRUE, interactive = TRUE, pal = c(`GO:MF`
   = "#dc3912", `GO:BP` = "#ff9900", `GO:CC` = "#109618", KEGG = "#dd4477",
   REAC = "#3366cc", WP = "#0099c6", TF = "#5574a6", MIRNA = "#22aa99", HPA
   = "#6633cc", CORUM = "#66aa00", HP = "#990099"))
 ```
-### Manhattan Plot: Downregulated Genes
+
+#### Manhattan Plot: Downregulated Genes
 ```{r}
 gprofiler2::gostplot(gostres_downreg, capped = TRUE, interactive = TRUE, pal = c(`GO:MF`
   = "#dc3912", `GO:BP` = "#ff9900", `GO:CC` = "#109618", KEGG = "#dd4477",
   REAC = "#3366cc", WP = "#0099c6", TF = "#5574a6", MIRNA = "#22aa99", HPA
   = "#6633cc", CORUM = "#66aa00", HP = "#990099"))
 ```
+These two plots show us the gene sets that our upregulated and downregulated genes belong to. 
+There are 11 gene sets for both the upregulated and downregulated genes. There is noticable different in the number of genes for upregulated vs. downregulated. For example, HPA and CORUM sets have significantly more genes in upregulated. 
 
-```{r}
+## Questions - Differential Gene Expression
+1. How many genes were significantly differentially expressed? What thresholds did you use and why?
+    - For the Limma model, we have `r genes_pass` genes that pass the p-value threshold of <0.05. This is a standard threshold used.
 
-```
+2. Which method did you use? And Why? 
+    - The Benjamini-Hochberg method was used. This method seemed to have modeled our data well, passing a sizeable number of genes in both p-value threshold. and corrected threshold.
 
-## Questions
+3. How many genes passed correction?
+Further, we have `r genes_pass_correction` genes that pass the corrected P value threshold. 
+    - With the Quasi-liklihood model, `r quasi_pvalue_pass` genes pass the threshold p-value <0.05 and `r quasi_corrected_pass` pass the correction.
+We have a sizeable amount of genes that pass the p-value threshold of 0.05, so we will represent these genes that passed through an MA plot and a heatmap.
+
+4. Do you conditions cluster together? Explain why or why not.
+    - Typically we see a clustering of timepoints 0:00, 4:00 and 8:00, timings when our participants conditions are likely asleep.
+
+## Questions - Thresholded Over Representation Analysis 
 1. Which method did you choose and why?
+    - GProfiler was used because it is compatible with the hgnc symbols of the dataset being used. In addition, it was a fairly recent and updated tool (latest publication from 2019 [2]). It also has a R library and web server visualization tools (both on Web Server and through R), making it easy to navigate.
+ 
 2. What annotation data did you use and why? What version of the annotation are you using?
+    - gProfiler provides serveral annonation sources and they were all used for experimentation purposes (GO:MF, GO:CC, GO:BP, KEGG, REAC, TF, MIRNA, HPA, CORUM, HP, WP). GO-BP returend the most number of sets and the version of this was releases/2019-07-01
+  
 3. How many genesets were returned with what thresholds?
-4. Run the analysis using the up-regulated set of genes, and the down-regulated set of genes separately. How do these results compare to using the whole list (i.e all differentially expressed genes 5. together vs. the up-regulated and down regulated differentially expressed genes separately)?
-6. Do the over-representation results support conclusions or mechanism discussed in the original paper?
-7. Can you find evidence, i.e. publications, to support some of the results that you see. How does this evidence support your results.
-
+    - For upregulated genes, the domain size of GO:BP was 18842.
+    - For downregualted genes, the domain size of GO:BP was 17847.
+  
+4. Run the analysis using the up-regulated set of genes, and the down-regulated set of genes separately. How do these results compare to using the whole list (i.e all differentially expressed genes together vs. the up-regulated and down regulated differentially expressed genes separately)?
+    - Answered above (under Manhattan Plot: Downregulated Genes portion). 
 
 ## References
 [1] L. Perrin et al., “Transcriptomic analyses reveal rhythmic and CLOCK-driven pathways in human skeletal muscle,” eLife, vol. 7, p. e34114, Apr. 2018, doi: 10.7554/eLife.34114.
+
+[2] U. Raudvere et al., “g:Profiler: a web server for functional enrichment analysis and conversions of gene lists (2019 update),” Nucleic Acids Research, vol. 47, no. W1, pp. W191–W198, Jul. 2019, doi: 10.1093/nar/gkz369.
