@@ -5,35 +5,51 @@ output:
   html_document:
     df_print: paged
 ---
-### Dataset Information:
-Publication Title: Transcriptomic analyses reveal rhythmic and CLOCK-driven pathways in human skeletal muscle\
-Publication Date: 2018-04-16\
-Publication Journal: eLife\
-GEO ID: GSE108539
+# Results from A1
+We will nest our A1 document in this notebook to continue our analysis.  
+```{r nest a1, message=FALSE, warning=FALSE, child='a1.Rmd', include=FALSE, results='hide'}
 
-### Previous Analysis Overview: 
+```
+---
 
-### Analysis Objectives: 
+# A2 starts here
+#### Data Overview: 
+The dataset being used in this analysis is based on what is published in [1].
+#### Analysis Objectives: 
 
-
-Temporary way to get the data
-```{r setup, message=FALSE, results='hide'}
-if (!requireNamespace("BiocManager", quietly = TRUE))
-  install.packages(pkgs = c("BiocManager","circlize"),
+First we will install the necessary packages: 
+```{r setup a2, message=FALSE, results='hide'}
+if (!requireNamespace("BiocManager", quietly = TRUE)) {
+   install.packages(pkgs = c("BiocManager"),
            repos = "http://cran.rstudio.org",
            dependencies = TRUE,
-           quiet = TRUE)
+           quiet = TRUE) 
+}
+if (!requireNamespace("circlize", quietly = TRUE)) {
+   install.packages(pkgs = c("circlize"),
+           repos = "http://cran.rstudio.org",
+           dependencies = TRUE,
+           quiet = TRUE) 
+}
+
+if (!requireNamespace("gprofiler2", quietly = TRUE)) {
+   install.packages(pkgs = c("circlize"),
+           repos = "http://cran.rstudio.org",
+           dependencies = TRUE,
+           quiet = TRUE) 
+}
+
 BiocManager::install("ComplexHeatmap")
 BiocManager::install("limma")
+BiocManager::install("GOstats")
 
 library(Biobase)
 library(circlize)
 library(limma)
+library(grid)
+library(gprofiler2)
 
-normalized_count_data <- read.csv("data/normalized_counts.csv")
-if (any(names(normalized_count_data) == 'X')) {
-  normalized_count_data <- normalized_count_data[-c(1)]
-}
+normalized_count_data <- normalized_counts_annot_filtered
 ```
 First we will setup or data variables:
 ```{r}
@@ -230,22 +246,159 @@ heatmap_matrix_tophits <- t(
 
 
 if(min(heatmap_matrix_tophits) == 0){
-    heatmap_col = colorRamp2(c( 0, max(heatmap_matrix_tophits)), 
+    heatmap_col = circlize::colorRamp2(c( 0, max(heatmap_matrix_tophits)), 
                              c( "white", "red"))
   } else {
-    heatmap_col = colorRamp2(c(min(heatmap_matrix_tophits), 0, max(heatmap_matrix_tophits)), c("blue", "white", "red"))
+    heatmap_col = circlize::colorRamp2(c(min(heatmap_matrix_tophits), 0, max(heatmap_matrix_tophits)), c("blue", "white", "red"))
   }
-heatmap_matrix_tophits(order(heatmap_matrix_tophits$))
+current_heatmap <- ComplexHeatmap::Heatmap(as.matrix(heatmap_matrix_tophits),
+                           cluster_rows = TRUE,
+                           cluster_columns = TRUE,
+                               show_row_dend = TRUE,
+                               show_column_dend = FALSE, 
+                               show_column_names = TRUE, 
+                               show_row_names = FALSE,
+                               show_heatmap_legend = TRUE,
+                           column_title =  "Heatmap of top gene hits - Limma Model",
+                                                       column_names_gp = gpar(fontsize = 8)
+
+                               )
+current_heatmap
+```
+INSERT ANALYSIS OF HEATMAP HERE.
+
+Now we will continue our differential analysis to see differential expression using a different model, the Quasi liklihood model. \
+\
+First we will get our filtered count data from A1 and create our Quasi liklihood model. 
+ASK HERE WHAT COEF TO CHOOSE WITH MULTIPLE GROUPS...
+```{r}
+intron_data_matrix <- inverse_data_matrix[ , grepl("Intron.*", colnames(inverse_data_matrix))]
+d = DGEList(counts=intron_data_matrix, group=samples$timepoint)
+d <- estimateDisp(d, model_design)
+fit <- glmQLFit(d, model_design)
+model_design[1:10, 1:5]
+qlf.pos_vs_neg <- glmQLFTest(fit)
+topTags(qlf.pos_vs_neg)
+```
+```{r}
+qlf_output_hits <- topTags(qlf.pos_vs_neg,sort.by = "PValue",
+                           n = nrow(normalized_count_data))
+quasi_pvalue_pass <- length(which(qlf_output_hits$table$PValue < 0.05))
+quasi_corrected_pass <- length(which(qlf_output_hits$table$FDR < 0.05))
+
+```
+With the Quasi-liklihood model, `r quasi_pvalue_pass` genes pass the threshold p-value <0.05 and `r quasi_corrected_pass` pass the correction.\
+\
+Next we will compare the different models we generated (Limma vs Quasi liklihood)
+```{r}
+qlf_pat_model_pvalues <- data.frame(
+          ensembl_id = rownames(qlf_output_hits$table),
+          qlf_patient_pvalue=qlf_output_hits$table$PValue)
+limma_pat_model_pvalues <-  data.frame(
+          ensembl_id = output_hits$ensembl_gene_id,
+          limma_patient_pvalue = output_hits$P.Value)
+two_models_pvalues <- merge(qlf_pat_model_pvalues,
+                            limma_pat_model_pvalues,
+                            by.x=1,by.y=1)
+two_models_pvalues$colour <- "black"
+two_models_pvalues$colour[two_models_pvalues$qlf_patient_pvalue<0.05] <- "orange"
+two_models_pvalues$colour[two_models_pvalues$limma_patient_pvalue<0.05] <- "blue"
+two_models_pvalues$colour[two_models_pvalues$qlf_patient_pvalue<0.05 & two_models_pvalues$limma_patient_pvalue<0.05] <- "red"
+plot(two_models_pvalues$qlf_patient_pvalue,
+     two_models_pvalues$limma_patient_pvalue,
+     col = two_models_pvalues$colour,
+     xlab = "QLF patient model p-values",
+     ylab ="Limma Patient model p-values",
+     main="QLF vs Limma")
+
+```
+```{r}
+ensembl_of_interest <- normalized_count_data_introns$ensembl_gene_id[
+  which(normalized_count_data_introns$hgnc_symbol == "CLOCK")]
+two_models_pvalues$colour <- "grey"
+two_models_pvalues$colour[two_models_pvalues$ensembl_id==ensembl_of_interest] <- "red"
+plot(two_models_pvalues$qlf_patient_pvalue,
+     two_models_pvalues$limma_patient_pvalue,
+     col = two_models_pvalues$colour,
+     xlab = "QLF patient model p-values",
+     ylab ="Limma Patient model p-values",
+     main="QLF vs Limma")
+points(two_models_pvalues[
+  two_models_pvalues$ensembl_id==ensembl_of_interest,2:3],
+       pch=24,  col="red", cex=1.5)
+```
+
+Now we will generate a heatmap for the Quasi Likelihood model. 
+```{r}
+top_hits <- rownames(qlf_output_hits$table)[output_hits$P.Value<0.05]
+heatmap_matrix_tophits <- t(
+  scale(t(heatmap_matrix_new[which(rownames(heatmap_matrix_new) %in% top_hits),])))
+if(min(heatmap_matrix_tophits) == 0){
+    heatmap_col = circlize::colorRamp2(c( 0, max(heatmap_matrix_tophits)), 
+                             c( "white", "red"))
+  } else {
+    heatmap_col = circlize::colorRamp2(c(min(heatmap_matrix_tophits), 0, max(heatmap_matrix_tophits)), c("blue", "white", "red"))
+  }
 current_heatmap <- ComplexHeatmap::Heatmap(as.matrix(heatmap_matrix_tophits),
                            cluster_rows = TRUE,
                            cluster_columns = TRUE,
                                show_row_dend = TRUE,
                                show_column_dend = TRUE, 
+                               col=heatmap_col,
                                show_column_names = TRUE, 
                                show_row_names = FALSE,
-                               show_heatmap_legend = TRUE
-                               )
+                               show_heatmap_legend = TRUE,
+                               column_title =  "Heatmap of top gene hits - Quasi liklihood Model", 
+                            column_names_gp = gpar(fontsize = 8)
+)
 current_heatmap
 ```
+Compared to the limma heatmap, we see signficantly less differentiation here. However, the pattern of more differentation at timepoints 00:00 and 04:00 (times where participants are likely asleep) remains consistent between the two models.
+
+## Thresholded List
+```{r}
+qlf_output_hits_withgn <- merge(normalized_count_data[,1:2],qlf_output_hits, by.x=1, by.y = 0)
+qlf_output_hits_withgn[,"rank"] <- -log(qlf_output_hits_withgn$PValue,base =10) * sign(qlf_output_hits_withgn$logFC)
+qlf_output_hits_withgn <- qlf_output_hits_withgn[order(qlf_output_hits_withgn$rank),]
+
+upregulated_genes <- qlf_output_hits_withgn$hgnc_symbol[
+  which(qlf_output_hits_withgn$PValue < 0.40 
+             & qlf_output_hits_withgn$logFC > 0)]
+downregulated_genes <- qlf_output_hits_withgn$hgnc_symbol[
+  which(qlf_output_hits_withgn$PValue < 0.05 
+             & qlf_output_hits_withgn$logFC < 0)]
+
+n_upreg_genes <- length(upregulated_genes)
+n_downreg_genes <- length(downregulated_genes)
 
 
+write.table(x=upregulated_genes,
+            file=file.path("data","upregulated_genes.txt"),sep = "\t",
+            row.names = FALSE,col.names = FALSE,quote = FALSE)
+write.table(x=downregulated_genes,
+            file=file.path("data","downregulated_genes.txt"),sep = "\t",
+            row.names = FALSE,col.names = FALSE,quote = FALSE)
+
+```
+We have identified `r {n_upreg_genes}` upregulated genes and `r {n_downreg_genes}` downregulated genes to be used in our gene enrichment analysis. 
+
+## Enrichment Analysis
+```{r}
+
+gostres <- gprofiler2::gorth(upregulated_genes, source_organism = "hsapiens",
+  target_organism = "hsapiens", numeric_ns = "", mthreshold = Inf,
+  filter_na = TRUE)
+
+gprofiler2::gostplot(gostres)
+
+```
+
+## Questions
+1. Which method did you choose and why?
+2. What annotation data did you use and why? What version of the annotation are you using?
+3. How many genesets were returned with what thresholds?
+4. Run the analysis using the up-regulated set of genes, and the down-regulated set of genes separately. How do these results compare to using the whole list (i.e all differentially expressed genes 5. together vs. the up-regulated and down regulated differentially expressed genes separately)?
+6. Do the over-representation results support conclusions or mechanism discussed in the original paper?
+7. Can you find evidence, i.e. publications, to support some of the results that you see. How does this evidence support your results.
+## References
+[1] L. Perrin et al., “Transcriptomic analyses reveal rhythmic and CLOCK-driven pathways in human skeletal muscle,” eLife, vol. 7, p. e34114, Apr. 2018, doi: 10.7554/eLife.34114.
