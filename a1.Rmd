@@ -26,8 +26,18 @@ if (requireNamespace("BiocManager", quietly = TRUE)) {
                      dependencies = TRUE,
                      quiet=TRUE)
 }
-if (requireNamespace("dplyr", quietly = TRUE)) {
+
+tryCatch(
+    if (requireNamespace("dplyr", quietly = TRUE)) {
     install.packages("dplyr",
+                     repos = "http://cran.rstudio.org",
+                     dependencies = TRUE,
+                     quiet=TRUE)
+  },
+  error=function(e) {e})
+
+if (requireNamespace("edgeR", quietly = TRUE)) {
+    install.packages("edgeR",
                      repos = "http://cran.rstudio.org",
                      dependencies = TRUE,
                      quiet=TRUE)
@@ -219,6 +229,9 @@ df <- data.frame(matrix(unlist(ensembl_id_missing_list),
                         nrow=length(ensembl_id_missing_gene), byrow=T))
 colnames(df) <- c("ensembl_id")
 mapped_genes <- nrow(exp_data) - length(ensembl_id_missing_gene) - length(duplicated) - 1
+
+normalized_counts_annot_filtered <- normalized_counts_annot[
+  which(!is.na(normalized_counts_annot$hgnc_symbol)), ]
 ```
 ## Questions
 **What are the control and test conditions of the dataset?** \
