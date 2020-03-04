@@ -41,12 +41,13 @@ if (requireNamespace("edgeR", quietly = TRUE)) {
                      repos = "http://cran.rstudio.org",
                      dependencies = TRUE,
                      quiet=TRUE)
+
 }
 
 library(BiocManager)
 library(Biobase)
 library(GEOquery)
-library(edgeR)
+library("edgeR")
 library(biomaRt)
 BiocManager::install("biomaRt")
 

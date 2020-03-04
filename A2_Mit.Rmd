@@ -122,7 +122,7 @@ Note: Code for Heatmap matrix for unthresholded dataset is commented out and hid
 # get_heatmap_normalized(normalized_count_data_exons)
 ```
 
-
+Here we are preparing a matrix to test for differences in our key gene of interest (CLOCK) gene, between our experiment groups.
 ```{r}
 gene_of_interest <- which(normalized_count_data_exons$hgnc_symbol == "CLOCK")
 participants <- c("Exon_15", "Exon_3", "Exon_2","Exon_6", "Exon_7", "Exon_9", "Exon_13", "Exon_4", "Exon_12", "Exon_1")
@@ -156,7 +156,7 @@ for (l in matricies) {
 colnames(timepoint_clock_matrix) <- c("12.00", "16.00", "20.00", "00.00", "04.00", "08.00")
 timepoint_clock_matrix
 ```
-To compare the CLOCK gene across our timepoint groups, we will perform an ANOVA as we have more than 2 groups in the data.
+To compare the CLOCK gene across our timepoint groups, we will perform an ANOVA (rather than a t-test) as we have more than 2 groups in the data. We will need to transform the matrix created in the previous block to use these data in the ANOVA function. 
 ```{r}
 df_clock_timepoint <- data.frame()
 for (col in 1:ncol(timepoint_clock_matrix)) {
@@ -180,11 +180,11 @@ pat_colors <- unlist(lapply(pat_colors,FUN=function(x){rep(x,2)}))
 limma::plotMDS(heatmap_matrix_exon,
                col = pat_colors)
 ```
-Typically, our sampels cluster together, though we have 4 outliers to the right of the graph.
+Typically, our samples cluster together, though we have 4 outliers to the right of the graph.
 
 In the study related to the dataset, they are looking at which genes are expressed at the 6 different timepoints to get a sense of the genes involved in the human circadian rhythm. 
 
-Here, we will fit our data from each time point to a linear model. To do this, we will first we will segegrate our patient samples intro groups by patient and timepoint of sample.
+Here, we will fit our data from each timepoint to a linear model. To do this, we will first create our experiment model design and will segregate our patient samples into groups by patient and timepoint.
 
 ```{r}
 samples <- data.frame(
@@ -378,7 +378,7 @@ qlf_output_hits_withgn[,"rank"] <- -log(qlf_output_hits_withgn$PValue,base =10) 
 qlf_output_hits_withgn <- qlf_output_hits_withgn[order(qlf_output_hits_withgn$rank),]
 
 upregulated_genes <- qlf_output_hits_withgn$hgnc_symbol[
-  which(qlf_output_hits_withgn$PValue < 0.05
+  which(qlf_output_hits_withgn$PValue < 0.45
              & qlf_output_hits_withgn$logFC > 0)]
 downregulated_genes <- qlf_output_hits_withgn$hgnc_symbol[
   which(qlf_output_hits_withgn$PValue < 0.05 
@@ -407,8 +407,6 @@ gostres_downreg <- gprofiler2::gost(downregulated_genes, organism = "hsapiens", 
   "fdr", "false_discovery_rate", "gSCS", "analytical"),
   domain_scope = c("annotated"), custom_bg = NULL,
   numeric_ns = "", sources = NULL)
-
-gostres_upreg$result
 ```
 
 #### Manhattan Plot: Upregulated Genes
@@ -417,6 +415,7 @@ gprofiler2::gostplot(gostres_upreg, capped = TRUE, interactive = TRUE, pal = c(`
   = "#dc3912", `GO:BP` = "#ff9900", `GO:CC` = "#109618", KEGG = "#dd4477",
   REAC = "#3366cc", WP = "#0099c6", TF = "#5574a6", MIRNA = "#22aa99", HPA
   = "#6633cc", CORUM = "#66aa00", HP = "#990099"))
+
 ```
 
 #### Manhattan Plot: Downregulated Genes
@@ -454,6 +453,7 @@ We have a sizeable amount of genes that pass the p-value threshold of 0.05, so w
 3. How many genesets were returned with what thresholds?
     - For upregulated genes, the domain size of GO:BP was 18842.
     - For downregualted genes, the domain size of GO:BP was 17847.
+    - Note threshold was changed to 0.45 for upregulated to balance the number of genesets for upregulated vs downregulated
   
 4. Run the analysis using the up-regulated set of genes, and the down-regulated set of genes separately. How do these results compare to using the whole list (i.e all differentially expressed genes together vs. the up-regulated and down regulated differentially expressed genes separately)?
     - Answered above (under Manhattan Plot: Downregulated Genes portion). 
