@@ -1,0 +1,183 @@
+---
+title: "BCB420 - A1"
+output: html_document
+author: "Mit Patel"
+---
+
+```{r setup, message=FALSE, results='hide'}
+knitr::opts_chunk$set(warning = FALSE)
+if (requireNamespace("BiocManager", quietly = TRUE)) {
+    install.packages("BiocManager",
+                     repos = "http://cran.rstudio.org",
+                     dependencies = TRUE,
+                     quiet=TRUE)
+}
+
+tryCatch(
+    if (requireNamespace("dplyr", quietly = TRUE)) {
+    install.packages("dplyr",
+                     repos = "http://cran.rstudio.org",
+                     dependencies = TRUE,
+                     quiet=TRUE)
+  },
+  error=function(e) {e})
+
+if (requireNamespace("edgeR", quietly = TRUE)) {
+    install.packages("edgeR",
+                     repos = "http://cran.rstudio.org",
+                     dependencies = TRUE,
+                     quiet=TRUE)
+
+}
+
+library(BiocManager)
+library(Biobase)
+library(GEOquery)
+library("edgeR")
+library(biomaRt)
+BiocManager::install("biomaRt")
+
+```
+
+```{r data download, message=FALSE, results='hide'}
+gset <- getGEO("GSE108539", GSEMatrix=FALSE, getGPL=FALSE)
+current_gpl <- names(GPLList(gset))
+current_gpl_info <- Meta(getGEO(current_gpl))
+```
+
+```{r downloading data from GEO query}
+
+sfiles = getGEOSuppFiles('GSE108539')
+fnames = rownames(sfiles)
+exp_data = read.delim(fnames[1],header=TRUE,
+                check.names = FALSE)
+
+samples <- data.frame(lapply(colnames(exp_data)[2:115],
+                             FUN = function(x) {
+                               unlist(strsplit(x, split="_"))[c(2,3,4,1)]
+                             }))
+colnames(samples) <- colnames(exp_data)[2:115]
+rownames(samples) <- c("patients", "sample_number", "time", "sequence_type")
+samples <- data.frame(t(samples))
+samples[1:10, ] # showing first 10 rows.
+```
+
+```{r}
+summarized_gene_counts <- sort(table(exp_data$Gene_name),decreasing = TRUE)
+length(summarized_gene_counts[which(summarized_gene_counts>1)])
+```
+
+```{r box plot distribution of data, fig.width=8}
+plot_data = exp_data[, 2:115]
+plot_data_intron <- exp_data[, 2:58]
+plot_data_exon <- exp_data[, 59:115]
+
+intron_plot <- boxplot(plot_data_intron, xlab = "Samples", ylab = "log2 CPM", 
+        las = 2, cex = 0.5, cex.lab = 0.5,
+        cex.axis = 0.5, main = "Box Plot: RNASeq Count Distribution for Intronsic Sequences")
+abline(h = median(apply(plot_data_intron, 2, median)), col = "red", lwd = 0.6, lty = "solid")
+
+boxplot(plot_data_exon, xlab = "Samples", ylab = "log2 CPM", 
+        las = 2, cex = 0.5, cex.lab = 0.5,
+        cex.axis = 0.5, main = "Box Plot: RNASeq Count Distribution for Exonic Sequences") #CHANGE 
+abline(h = median(apply(plot_data_exon, 2, median)), col = "red", lwd = 0.6, lty = "solid")
+```
+```{r density plot distribution of data, fig.height=8}
+counts_density <- apply(exp_data[, 2:115], 2, density)  #calculate the limits across all the samples
+xlim <- 0; ylim <- 0
+for (i in 1:length(counts_density)) {
+  xlim <- range(c(xlim, counts_density[[i]]$x)); 
+  ylim <- range(c(ylim, counts_density[[i]]$y))
+}
+cols <- rainbow(length(counts_density))
+ltys <- rep(1, length(counts_density))
+#plot the first density plot to initialize the plot
+plot(counts_density[[1]], xlim=xlim, ylim=ylim, type="n", 
+     ylab="density", xlab="log2(cpm)", main="Density Plot: Filtered Counts", cex.lab = 0.85)
+#plot each line
+for (i in 1:length(counts_density)) lines(counts_density[[i]], col=cols[i], lty=ltys[i])
+#create legend
+legend("right", colnames(plot_data),  
+       col=cols, lty=ltys, cex=0.75, 
+       border ="blue",  text.col = "green4", 
+       merge = TRUE, bg = "gray90")
+
+```
+```{r MSD Plot}
+filtered_data_matrix <- as.matrix(exp_data[,2:115])
+# getting the inverse of the count values because the dataset was provided in log2 normalized counts 
+inverse_data_matrix <- apply(filtered_data_matrix, 2, function(x) 2^x)
+rownames(inverse_data_matrix) <- exp_data$Gene_name
+d = DGEList(counts=inverse_data_matrix, group=samples$sequence_type)
+d = calcNormFactors(d)
+normalized_counts <- cpm(d)
+
+plotMDS(d, labels=rownames(samples),
+        col = c("darkgreen","blue")[factor(samples$sequence_type)],
+        main="Multidimensional Scaling Plot: Distance betweeen Samples")
+```
+```{r tagwise dispersion}
+d = DGEList(counts=inverse_data_matrix, group=samples$patients)
+d = calcNormFactors(d)
+normalized_counts <- cpm(d)
+model_design <- model.matrix(~samples$patients)
+d <- estimateDisp(d, model_design)
+plotBCV(d,col.tagwise = "black",col.common = "red", main="Common vs Tagwise Dispersion")
+
+```
+
+```{r}
+plotMeanVar(d, show.raw.vars = TRUE, show.tagwise.vars=TRUE, 
+            show.ave.raw.vars = TRUE,  
+            NBline=TRUE,
+            show.binned.common.disp.vars = TRUE,
+            main="Mean-variance relationship",
+            legend=TRUE)
+```
+
+```{r identifier mapping}
+library(biomaRt)
+listMarts()
+listEnsemblArchives()[1:10,]
+
+ensembl <- useMart("ensembl")
+datasets <- listDatasets(ensembl)
+ensembl <- useDataset("hsapiens_gene_ensembl", mart=ensembl)
+biomart_human_filters <- listFilters(ensembl)
+biomart_human_filters[grep(biomart_human_filters$name,pattern="ensembl"),]
+listAttributes(ensembl)[1:10,1:2]
+
+conversion_stash <- "gene_id_conversion.rds"
+
+id_conversion <- getBM(attributes = c("ensembl_gene_id","hgnc_symbol"),
+                          filters = c("ensembl_gene_id"),
+                          values = exp_data$Gene_name,
+                          mart = ensembl)
+
+```
+
+```{r}
+summarized_gene_counts <- sort(table(id_conversion$hgnc_symbol),decreasing = TRUE)
+duplicated <- summarized_gene_counts[which(summarized_gene_counts>1)]
+duplicated
+```
+
+```{r}
+normalized_counts_annot <- merge(id_conversion, exp_data, by.x="ensembl_gene_id", by.y=1, all.y=TRUE)
+normalized_counts_annot[1:8, 1:2]
+```
+```{r}
+ensembl_id_missing_gene <- normalized_counts_annot$ensembl_gene_id[
+  which(is.na(normalized_counts_annot$hgnc_symbol))]
+```
+```{r}
+ensembl_id_missing_list <- strsplit(ensembl_id_missing_gene, " ")
+df <- data.frame(matrix(unlist(ensembl_id_missing_list), 
+                        nrow=length(ensembl_id_missing_gene), byrow=T))
+colnames(df) <- c("ensembl_id")
+mapped_genes <- nrow(exp_data) - length(ensembl_id_missing_gene) - length(duplicated) - 1
+
+normalized_counts_annot_filtered <- normalized_counts_annot[
+  which(!is.na(normalized_counts_annot$hgnc_symbol)), ]
+```
+

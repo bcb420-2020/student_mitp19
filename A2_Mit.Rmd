@@ -32,7 +32,7 @@ if (!requireNamespace("circlize", quietly = TRUE)) {
 }
 
 if (!requireNamespace("gprofiler2", quietly = TRUE)) {
-   install.packages(pkgs = c("circlize"),
+   install.packages(pkgs = c("gprofiler2"),
            repos = "http://cran.rstudio.org",
            dependencies = TRUE,
            quiet = TRUE) 

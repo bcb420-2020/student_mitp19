@@ -204,14 +204,23 @@ if (requireNamespace(&quot;BiocManager&quot;, quietly = TRUE)) {
                      quiet=TRUE)
 }</code></pre>
 <pre><code>## Warning: dependency 'BiocStyle' is not available</code></pre>
-<pre class="r"><code>if (requireNamespace(&quot;dplyr&quot;, quietly = TRUE)) {
+<pre class="r"><code>tryCatch(
+    if (requireNamespace(&quot;dplyr&quot;, quietly = TRUE)) {
     install.packages(&quot;dplyr&quot;,
                      repos = &quot;http://cran.rstudio.org&quot;,
                      dependencies = TRUE,
                      quiet=TRUE)
-}
+  },
+  error=function(e) {e})
 
-library(BiocManager)
+if (requireNamespace(&quot;edgeR&quot;, quietly = TRUE)) {
+    install.packages(&quot;edgeR&quot;,
+                     repos = &quot;http://cran.rstudio.org&quot;,
+                     dependencies = TRUE,
+                     quiet=TRUE)
+}</code></pre>
+<pre><code>## Warning: package 'edgeR' is not available (for R version 3.6.2)</code></pre>
+<pre class="r"><code>library(BiocManager)
 library(Biobase)
 library(GEOquery)
 library(edgeR)
@@ -230,8 +239,8 @@ current_gpl_info &lt;- Meta(getGEO(current_gpl))</code></pre>
 <strong>Original submission date:</strong> Mar 14 2013<br />
 <strong>Last update date:</strong> Mar 27 2019<br />
 <strong>Organism:</strong> Homo sapiens<br />
-<strong>No. of GEO datasets that use this technology:</strong> 5972<br />
-<strong>No. of GEO samples that use this technology:</strong> 161580</p>
+<strong>No. of GEO datasets that use this technology:</strong> 6080<br />
+<strong>No. of GEO samples that use this technology:</strong> 167630</p>
 <div id="here-we-are-creating-a-table-to-show-the-groups-in-our-sampling." class="section level3">
 <h3>Here we are creating a table to show the groups in our sampling.</h3>
 <pre class="r"><code>sfiles = getGEOSuppFiles('GSE108539')
@@ -446,7 +455,10 @@ normalized_counts_annot[1:8, 1:2]</code></pre>
 df &lt;- data.frame(matrix(unlist(ensembl_id_missing_list), 
                         nrow=length(ensembl_id_missing_gene), byrow=T))
 colnames(df) &lt;- c(&quot;ensembl_id&quot;)
-mapped_genes &lt;- nrow(exp_data) - length(ensembl_id_missing_gene) - length(duplicated) - 1</code></pre>
+mapped_genes &lt;- nrow(exp_data) - length(ensembl_id_missing_gene) - length(duplicated) - 1
+
+normalized_counts_annot_filtered &lt;- normalized_counts_annot[
+  which(!is.na(normalized_counts_annot$hgnc_symbol)), ]</code></pre>
 <div id="questions" class="section level2">
 <h2>Questions</h2>
 <p><strong>What are the control and test conditions of the dataset?</strong><br />
