@@ -1,24 +1,25 @@
 ---
 title: "BCB420- A3"
 author: "Mit Patel"
+data: March 25, 2020
 output:
   html_document:
     df_print: paged
+    toc: true
+    toc_depth: 3
 ---
 ### Dataset Information 
-**Publication Title:** Transcriptomic analyses reveal rhythmic and CLOCK-driven pathways in human skeletal muscle
-
-**Publication Date:** 2018-04-16
-
-**Publication Journal:** eLife
-
+**Publication Title:** Transcriptomic analyses reveal rhythmic and CLOCK-driven pathways in human skeletal muscle\
+**Publication Date:** 2018-04-16\
+**Publication Journal:** eLife\
 **GEO ID:** GSE108539
 
 We will first nest our A1 and A2 document in this notebook to continue our analysis.  
 ```{r nest a1, message=FALSE, warning=FALSE, child='A2_Mit_notext.Rmd', include=FALSE, eval=TRUE}
 ```
+### Table of Contents 
 
-## Information about Platform
+### Information about Platform
 **Platform Title:** `r current_gpl_info$title`\
 **Original submission date:** `r current_gpl_info$submission_date`\
 **Last update date:** `r current_gpl_info$last_update_date`\
@@ -26,19 +27,24 @@ We will first nest our A1 and A2 document in this notebook to continue our analy
 **No. of GEO datasets that use this technology:** `r length(current_gpl_info$series_id)`\
 **No. of GEO samples that use this technology:** `r length(current_gpl_info$sample_id)`
 
-## Previous Analyses: 
+### Previous Analyses: 
+We first selected a dataset of interest, cleaned and normalized the gene counts and mapped the gene names to HUGO symbols. 
 
-## A3 Analysis Objectives: 
-1. 
+We then performed differential gene expression analysis. For this, we designed a model to test one timepoint (20:00) against all other timepoints to calculate differential expression. The participants were awake at the 20:00 timepoint, and so we compared this against the samples where they were asleep. 
 
+We previously left off with completing a thresholded over-represntation analyaysis (ORA), where g:Profiler was used to map genes to known functional information from various datasources such as GO: Biological Proccesses.  
 
+### A3 Analysis Objectives: 
+1. Perform non-thresholded gene enrichment analysis using GSEA [2], [4]. 
+2. Visualize and analyze the non-thresholded gene enrichment analysis in Cytoscape [Ref].
+3. INSERT LAST ANALYSIS DESCRIPTION HERE
 
 First, we will generate our ranked list (from A2), omitting unneeded columns. We will also export this list of ranked genes for further analysis using in the GSEA software [2], [4]. 
 ```{r}
 ranked_list <- qlf_output_hits_withgn[, c("hgnc_symbol", "rank")]
 ranked_list[1:10, ]
 ranked_list <- ranked_list[ranked_list$hgnc_symbol != "", ] # removing rows with no gene name. 
-write.table(ranked_list[2:nrow(ranked_list), ], file="data/ranked_list.rnk", row.names = FALSE, sep="\t", quote=FALSE)
+write.table(ranked_list[2:nrow(ranked_list), ], file="data/ranked_list_twopoints.rnk", row.names = FALSE, sep="\t", quote=FALSE)
 ```
 We used the ranked list generated in the previous block and downloaded the GO (Biological Processes without GO annotations with evidence codes (IEA, ND, and RCA))[http://download.baderlab.org/EM_Genesets/March_01_2020/Human/symbol/Human_GOBP_AllPathways_no_GO_iea_March_01_2020_symbol.gmt] from the Bader Lab downloads directory. 
 The following settings were used for the GSEA Preranked analysis: 
@@ -46,8 +52,18 @@ The following settings were used for the GSEA Preranked analysis:
 This results in the following summary: 
 ![GSEA Summary](./images/02_gsea_summary.png)
 Here, na_pos are the upregulated genes and na_neg are down regulated genes. Immediately, we will notice that there are far more down regulated genesets in comparison to upregulated. 
+![GSEA EnrichmentMap in CytoScape](./images/03_cytoscape_full_network.png)
+The resulting Enrichment Map has 694 nodes and 3810 edges. 
 
-## Questions - Non-thresholded Gene set Enrichment Analysis 
+
+
+### Visualizing GSEA in in Cytoscape
+Next, we take the GSEA analysis and load it into Cytoscape for visualization and further analysis. 
+
+The EnrichmentMap [ref] app for Cytoscape was used to visaulize the GSEA results. The files from the GSEA results were inputted into EnrichmentMap. Parameters were adjusted such that the FDR Q value cutoff was set to 0.01. The EnrichmentMap build was then executed, resulting in the following map: 
+
+
+### Questions - Non-thresholded Gene set Enrichment Analysis 
 1. What method did you use? What genesets did you use? Make sure to specify versions and cite your methods.
     - GSEA was used for non-thresholded gene set analysis [2], [4]. 
     - The Bader Lab gene sets [1] were used as they are regularly updated with the latest annonations data. In particular, the March 2020, containing GO Human Biological process annotations and no IEA and pathways annotations was used [Gene set file link](http://download.baderlab.org/EM_Genesets/March_01_2020/Human/symbol/Human_GOBP_AllPathways_no_GO_iea_March_01_2020_symbol.gmt).
@@ -64,7 +80,7 @@ Here, na_pos are the upregulated genes and na_neg are down regulated genes. Imme
     - Just based on the number of genesets, show the results vary signficiantly between methods, making it difficult to compare the two analyses.git 
     - How data is organized also makes the comparing the methods difficult. Using gprofiler, the genes are seperated by annotation source while GSEA combines all annotations sources. 
 
-## References
+### References
 [1]D. Merico, R. Isserlin, O. Stueker, A. Emili, and G. D. Bader, “Enrichment Map: A Network-Based Method for Gene-Set Enrichment Visualization and Interpretation,” PLoS ONE, vol. 5, no. 11, p. e13984, Nov. 2010, doi: 10.1371/journal.pone.0013984.
 
 [2]A. Subramanian et al., “Gene set enrichment analysis: A knowledge-based approach for interpreting genome-wide expression profiles,” Proceedings of the National Academy of Sciences, vol. 102, no. 43, pp. 15545–15550, Oct. 2005, doi: 10.1073/pnas.0506580102.
