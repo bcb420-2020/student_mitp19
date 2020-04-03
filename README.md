@@ -5,3 +5,5 @@
 ### Link to A1 HTML file: https://github.com/bcb420-2020/student_mitp19/blob/master/a1.html
 
 ### Link to A2 HTML file: https://github.com/bcb420-2020/student_mitp19/blob/master/A2_Mit.html
+
+### Link to A3 HTML file: https://github.com/bcb420-2020/student_mitp19/blob/master/A3_Mit.html
