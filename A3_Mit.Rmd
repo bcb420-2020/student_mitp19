@@ -12,7 +12,8 @@ output:
 **Publication Title:** Transcriptomic analyses reveal rhythmic and CLOCK-driven pathways in human skeletal muscle\
 **Publication Date:** 2018-04-16\
 **Publication Journal:** eLife\
-**GEO ID:** GSE108539
+**GEO ID:** GSE108539\
+**Dataset Description:** 10 candidates with 6 biopsies each for a total of 57 samples being sequenced. To assess rhythms of gene expression in human skeletal muscle, RNA samples derived from muscle biopsies taken every 4 hr across 24 hr from 10 healthy volunteers were analyzed using RNA-seq
 
 We will first nest our A1 and A2 document in this notebook to continue our analysis.  
 ```{r nest a1 and 2, message=FALSE, warning=FALSE, child='A2_Mit_notext.Rmd', include=FALSE, eval=TRUE}
@@ -45,19 +46,22 @@ library(VennDiagram)
 **No. of GEO datasets that use this technology:** `r length(current_gpl_info$series_id)`\
 **No. of GEO samples that use this technology:** `r length(current_gpl_info$sample_id)`
 
-## Previous Analyses: 
-We first selected a dataset of interest, cleaned and normalized the gene counts and mapped the gene names to HUGO symbols. 
+## Previous Analyses 
+We first selected a dataset of interest [5], cleaned and normalized the gene counts and mapped the gene names to HUGO symbols. T
 
 We then performed differential gene expression analysis. For this, we designed a model to test one timepoint (20:00) against all other timepoints to calculate differential expression. The participants were awake at the 20:00 timepoint, and so we compared this against the samples where they were asleep. 
 
-We previously left off with completing a thresholded over-represntation analyaysis (ORA), where g:Profiler was used to map genes to known functional information from various datasources such as GO: Biological Proccesses.  
+We previously left off with completing a thresholded over-representation analysis (ORA), where g:Profiler was used to map genes to known functional information from various datasources such as GO: Biological Processes.   
 
 ## A3 Analysis Objectives: 
 1. Perform non-thresholded gene enrichment analysis using GSEA [2], [4]. 
-2. Visualize and analyze the non-thresholded gene enrichment analysis in Cytoscape [Ref].
-3. Peform analysis on "dark matter" (the genes )
+2. Visualize and analyze the non-thresholded gene enrichment analysis in Cytoscape [7].
+3. Perform analysis on "dark matter" (the genes that are over and under expressed but do not have an annotation source)
 
-## A3 Analysis
+
+# A3 Analysis
+
+## Non-thresholded Gene set Enrichment Analysis
 First, we will generate our ranked list (from A2), omitting unneeded columns. We will also export this list of ranked genes for further analysis using in the GSEA software [2], [4]. 
 ```{r}
 ranked_list <- qlf_output_hits_withgn[, c("hgnc_symbol", "rank")]
@@ -72,26 +76,49 @@ This results in the following summary:
 ![GSEA Summary](./images/02_gsea_summary.png)
 Here, na_pos are the upregulated genes and na_neg are down regulated genes. Immediately, we will notice that there are far more down regulated genesets in comparison to upregulated. 
 
-### Visualizing GSEA in in Cytoscape
+## Visualizing GSEA in in Cytoscape
 Next, we take the GSEA analysis and load it into Cytoscape for visualization and further analysis. 
 
 The EnrichmentMap [1] app for Cytoscape was used to visaulize the GSEA results. The files from the GSEA results were inputted into EnrichmentMap. Parameters were adjusted such that the FDR Q value cutoff was set to 0.01. The EnrichmentMap build was then executed, resulting in the following map: 
 ![GSEA EnrichmentMap in CytoScape](./images/03_cytoscape_full_network.png)
 The resulting Enrichment Map has 694 nodes and 4456 edges. 
 
+### Questions - Non-thresholded Gene set Enrichment Analysis 
+1. What method did you use? What genesets did you use? Make sure to specify versions and cite your methods.
+    - GSEA was used for non-thresholded gene set analysis [2], [4]. 
+    - The Bader Lab gene sets [1] were used as they are regularly updated with the latest annotations data. In particular, the March 2020, containing GO Human Biological process annotations and no IEA and pathways annotations was used [Gene set file link](http://download.baderlab.org/EM_Genesets/March_01_2020/Human/symbol/Human_GOBP_AllPathways_no_GO_iea_March_01_2020_symbol.gmt).
+2. Summarize your enrichment results.
+    - Overall, there are 5234 gene sets identified when datasets are restricted  between 15-200 genes. 
+    - Within the 5234 genesets, there are 823 genesets that are enriched with upregulated genes and 4411 genes that are enriched downregulated genes (heavilty in favour of gene sets enriched with down regulated genes)
+    - The top gene in the upregulated gene sets is Electron Transport Chain (GOBP) with a size of 79, ES value of 0.83, NES value of 3.46 and p-value of 0. 
+    - The top gene in the downregulated gene sets is Hallmark TNFA Signaling via NFKB with a size of 170, ES value of -0.87, NES value of -1.94 and p-value of 0.
+3. How do these results compare to the results from the thresholded analysis in Assignment #2. Compare qualitatively. Is this a straight forward comparison? Why or why not?
+    - Right off the bat, we a large discrepancy. We have a total of 5234 gene sets from the non-thresholded analysis, while we had 36689 gene sets from just GO: Biological processes (which is one of the annotation sources also used in the Bader Lab genesets. 
+    - There is a similar pattern in terms of ratio of upregulated vs downregulated gene set numbers. There were significantly more gene sets for the downregulated in the thresholded analysis. 
+    - Some other similarities can be identified. For example, the top gene in the upregulated set using GSEA is Electron Transport Chain and this gene is also in the top 15 in the gprofiler analysis (under GOBP).
+    - Just based on the number of genesets, show the results vary signficiantly between methods, making it difficult to compare the two analyses
+    - How data is organized and presented between methods also makes the comparing the methods difficult. Using gprofiler, the genes are separated  by annotation source while GSEA combines all annotations sources. 
+    
 ### Creating a Publication Ready Figure
 We performed a search query on the EnrichmentMap, selecting nodes and edges in the Sleep Regulation pathway. 
-The selected nodes and edges were then annotated using AutoAnnoate. The parameters in AutoAnnotate were "Annotate Entire network", limited to the "Sleep Regulation" search query selected nodes and edges. The "layer network to prevent cluster overlap" selector was selected and the label column was set to GS_DESCR. The "Publication-Ready" selector was selected under the EnrichmentMap panel, removing labels on individual nodes. These settings result in the following publication ready image: 
-![Publiction Ready Image](./images/04_publication_ready.png)
+The selected nodes and edges were then annotated using AutoAnnotate. The parameters in AutoAnnotate were "Annotate Entire network", limited to the "Sleep Regulation" search query selected nodes and edges. The "layer network to prevent cluster overlap" selector was selected and the label column was set to GS_DESCR. The "Publication-Ready" selector was selected under the EnrichmentMap panel, removing labels on individual nodes. These settings result in the following publication ready image: 
+![Publication Ready Image](./images/04_publication_ready.png)
+Figure 4(i) is the overall network generated from the pre-ranked GSEA results. Figure 4(ii) highlights the selected pathways upon performing a search query for the Sleep Regulation pathway. Figure 4(iii) is a zoomed in and annotated network of the "Sleep Regulation" query selected pathways. 
+
+From this publication-ready figure, we see that majority of the genesets in the Sleep Regulation pathway are downregulated, which makes sense as we our model is looking at the differential expression at 8pm versus other timepoints which include times where participants are sampled during sleep. If we were looking at the 12am or 4am timepoints in our model, then we would expect these genesets to be upregulated.
+
+Another interesting part to these results is the upregulation of a cluster of nodes with the annotation "runx2 expression slits". Upon researching this term, we find that this expression is a mesenchymal stem marker for cancer [6].  This may suggest that negative effects to the Sleep Regulation pathway may have a connection the known Runx2 cancer biomarker. 
 
 ### Collapsed Theme Network 
 We then created a collapsed theme network through the AutoAnnotate tab in the control panel. 
 ![Collapsed Network](./images/05_collapsed_network.png)
+Figure 5(iii) is a summary generated by collapsing node clusters  using AutoAnnotate. This is a more organized and general way to visualize the results of Figure 4(iii). 
 
-### Dark Matter Analysis 
+
+## Dark Matter Analysis 
 We will analyze the genes that have no information from our analyses. In particular, we will highlight and investigate that are significantly differentially expressed in our model but are not annotated to any pathways. 
 
-First, we will load in our GSEA data and prepare our expression and ranked data. 
+First, we will load in gene set annotations data used in the GSEA pre-ranked analysis along with our expression and ranked data. 
 ```{r}
 gmt_file <- file.path(getwd(),"data",
                     "Human_GOBP_AllPathways_no_GO_iea_March_01_2020_symbol.gmt")
@@ -111,15 +138,18 @@ if(length(gsea_directories) == 1){
   gsea_results_files <- list.files(path = gsea_dir, 
                                  pattern = "gsea_report_*.*.xls")
 
-    enr_file1 <- read.table(file.path(gsea_dir,gsea_results_files[1]), 
+  enr_file1 <- read.table(file.path(gsea_dir,gsea_results_files[1]), 
                         header = TRUE, sep = "\t", quote="\"",  
                         stringsAsFactors = FALSE,row.names=1)
   enr_file2 <- read.table(file.path(gsea_dir,gsea_results_files[1]), 
                         header = TRUE, sep = "\t", quote="\"",  
                         stringsAsFactors = FALSE,row.names=1)
 }
+file.path(gsea_dir,gsea_results_files[1])
+file.path(gsea_dir,gsea_results_files[1])
 ```
 
+Next, we process our genesets data and select genesets with FDR values less than a threshold of 0.001, and prepare the data to be used visualized using a Venn diagram. 
 ```{r}
 all_enr_genesets<- c(rownames(enr_file1), rownames(enr_file2))
 genes_enr_gs <- c()
@@ -127,11 +157,8 @@ for(i in 1:length(all_enr_genesets)){
   current_geneset <- unlist(genesets$genesets[which(genesets$geneset.names %in% all_enr_genesets[i])]) 
   genes_enr_gs <- union(genes_enr_gs, current_geneset)
 }
-```
-
-```{r}
 FDR_threshold <- 0.001
-#get the genes from the set of enriched pathwasy (no matter what threshold)
+# get the genes from the set of enriched pathwasy (no matter what threshold)
 all_sig_enr_genesets<- c(rownames(enr_file1)[which(enr_file1[,"FDR.q.val"]<=FDR_threshold)], rownames(enr_file2)[which(enr_file2[,"FDR.q.val"]<=FDR_threshold)])
 genes_sig_enr_gs <- c()
 for(i in 1:length(all_sig_enr_genesets)){
@@ -141,6 +168,7 @@ for(i in 1:length(all_sig_enr_genesets)){
 genes_all_gs <- unique(unlist(genesets$genesets))
 ```
 
+Below we generate a Venn Diagram to show the overlap of genes expressed in the dataset, the genes in the genesets file, the genes in the enrichment results and the genes in the significant enrichment results. 
 ```{r, message=FALSE}
 A <- genes_all_gs
 B <- genes_enr_gs
@@ -155,30 +183,36 @@ draw.triple.venn( area1=length(A), area2=length(B), area3 = length(C),
                   cat.col = c("red","green","blue")
 )
 ```
-![Venn Diagram](./data/dark_matter_overlaps.png)
-```{r}
+![Figure 6. Venn Diagram](./data/dark_matter_overlaps.png)
+
+We will now look at the top 5 genes that are significantly under expressed in our model but are not annotated to any pathways. 
+```{r} 
 genes_no_annotation <- setdiff(expression[,2], genes_all_gs)
 ranked_gene_no_annotation <- ranks[which(ranks[,1] %in% genes_no_annotation),]
-ranked_gene_no_annotation[1:10,]
-
+ranked_gene_no_annotation[1:5, ]
 ```
+We will use (Uniprot Knowledge Base)[https://www.uniprot.org/uniprot/] to investigate these genes. 
+    - LUCAT1: No results found for this search term
+    - (TMEM71)[https://www.uniprot.org/uniprot/Q6P5X7]: Codes for multi-pass transmembrane protein 
+    - (TENT5C)[https://www.uniprot.org/uniprot/Q5VWP2]: An enzyme that acts as a RNA polymerase enchancing mRNA stability and gene expression
+    - (RUBCNL)[https://www.uniprot.org/uniprot/Q9H714]: Protein associated with UVRAG as autophagy enhancer
+    - (ALG1L13P): No results found for this search term
+    
+Next, we will look at the top 5 genes that are both significantly expressed genes in our model that are not annotated to any pathways. 
+```{r}
+ranked_gene_no_annotation_increasing <- ranked_gene_no_annotation[order(-ranked_gene_no_annotation$rank), ]
+ranked_gene_no_annotation_increasing[1:5,]
+```
+We will perform the same analysis using Uniprot Knowledge Base. 
+    - (PLIN4)[https://www.uniprot.org/uniprot/Q96Q06]: May play a role in triacylglycerol packaging into adipocytes. May function as a coat protein involved in the biogenesis of lipid droplets
+    - (SMIM26)[https://www.uniprot.org/uniprot/A0A096LP01]: Small integral membrane protein 26
+    - (STBD1)[https://www.uniprot.org/uniprot/O95210]: Acts as a cargo receptor for glycogen. Delivers its cargo to an autophagic pathway called glycophagy, resulting in the transport of glycogen to lysosomes.
+    - (TMEM37)[https://www.uniprot.org/uniprot/Q9H714]: Thought to stabilize the calcium channel in an inactivated (closed) state. Modulates calcium current when coexpressed with CACNA1G (By similarity).
+    - (SPAG7)[https://www.uniprot.org/uniprot/O75391]: Sperm-associated antigen 7
 
+There seems to be no general pattern of interesting insight from the dark matter analysis. Though the UniProt did not yield interesting results, further research of these genes revealed that (LUCAT1 is a lung cancer associated gene)[https://www.genecards.org/cgi-bin/carddisp.pl?gene=LUCAT1] and (RUBCNL is associated with cervical cancer)[https://www.genecards.org/cgi-bin/carddisp.pl?gene=RUBCNL].
 
-### Questions - Non-thresholded Gene set Enrichment Analysis 
-1. What method did you use? What genesets did you use? Make sure to specify versions and cite your methods.
-    - GSEA was used for non-thresholded gene set analysis [2], [4]. 
-    - The Bader Lab gene sets [1] were used as they are regularly updated with the latest annonations data. In particular, the March 2020, containing GO Human Biological process annotations and no IEA and pathways annotations was used [Gene set file link](http://download.baderlab.org/EM_Genesets/March_01_2020/Human/symbol/Human_GOBP_AllPathways_no_GO_iea_March_01_2020_symbol.gmt).
-2. Summarize your enrichment results.
-    - Overall, there are 5234 gene sets identified when datasets are restrictings between 15-200 genes. 
-    - Within the 5234 genests, there are 823 genesets that are enriched with upregulated genes and 4411 genes that are enriched downregulated genes (heavilty in favour of gene sets enriched with down regulated genes)
-    - The top gene in the upregulated gene sets is Electron Transport Chain (GOBP) with a size of 79, ES value of 0.83, NES value of 3.46 and p-value of 0. 
-    - The top gene in the downregulated gene sets is Hallmark TNFA Signaling via NFKB with a size of 170, ES value of -0.87, NES value of -1.94 and p-value of 0.
-3. How do these results compare to the results from the thresholded analysis in Assignment #2. Compare qualitatively. Is this a straight forward comparison? Why or why not?
-    - Right off the bat, we a large discrepancy. We have a total of 5234 gene sets from the non-thresholded analysis, while we had 36689 gene sets from just GO: Biological processes (which is one of the annotation sources also used in the Bader Lab genesets. 
-    - There is a similar pattern in terms of ratio of upregulated vs downregulated gene set numbers. There were significantly more gene sets for the downregulated in the thresholded analysis. 
-    - Some other similarities can be identified. For example, the top gene in the upregulated set using GSEA is Electron Transport Chain and this gene is also in the top 15 in the gprofiler analysis (under GOBP).
-    - Just based on the number of genesets, show the results vary signficiantly between methods, making it difficult to compare the two analyses.git 
-    - How data is organized also makes the comparing the methods difficult. Using gprofiler, the genes are seperated by annotation source while GSEA combines all annotations sources. 
+The CytoScape EnrichmentMap analysis also revealed a theme of cancer, so there may be an association  between the Sleep Regulation pathway and cancer. 
 
 ## References
 [1]D. Merico, R. Isserlin, O. Stueker, A. Emili, and G. D. Bader, “Enrichment Map: A Network-Based Method for Gene-Set Enrichment Visualization and Interpretation,” PLoS ONE, vol. 5, no. 11, p. e13984, Nov. 2010, doi: 10.1371/journal.pone.0013984.
@@ -191,4 +225,6 @@ ranked_gene_no_annotation[1:10,]
 
 [5]L. Perrin et al., “Transcriptomic analyses reveal rhythmic and CLOCK-driven pathways in human skeletal muscle,” eLife, vol. 7, p. e34114, Apr. 2018, doi: 10.7554/eLife.34114.
 
+[6]M. T. Valenti et al., “Runx2 expression: A mesenchymal stem marker for cancer,” Oncology Letters, vol. 12, no. 5, pp. 4167–4172, Nov. 2016, doi: 10.3892/ol.2016.5182.
 
+[7] Shannon, P. “Cytoscape: A Software Environment for Integrated Models of Biomolecular Interaction Networks.” Genome Research 13, no. 11 (November 1, 2003): 2498–2504. https://doi.org/10.1101/gr.1239303.

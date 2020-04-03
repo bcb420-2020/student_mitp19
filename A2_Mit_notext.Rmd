@@ -9,7 +9,6 @@ output:
 
 ```
 
-# A2 starts here
 ```{r setup a2, message=FALSE, results='hide'}
 if (!requireNamespace("BiocManager", quietly = TRUE)) {
    install.packages(pkgs = c("BiocManager"),
@@ -64,7 +63,6 @@ rownames(heatmap_matrix_intron) <- normalized_count_data_exons$ensemble_gene_id
 colnames <- colnames(normalized_count_data_exons[ ,3:ncol(normalized_count_data_exons)])
 ```
 
-Note: Code for Heatmap matrix for unthresholded dataset is commented out and hidden as it takes too long to execture. 
 ```{r heatmap prefilter, echo=FALSE}
 # get_heatmap <- function(df) {
 #   heatmap_matrix <- df[ ,3:ncol(df)]
@@ -352,38 +350,36 @@ downregulated_genes <- qlf_output_hits_withgn$hgnc_symbol[
 n_upreg_genes <- length(upregulated_genes)
 n_downreg_genes <- length(downregulated_genes)
 ```
-We have identified `r {n_upreg_genes}` upregulated genes and `r {n_downreg_genes}` downregulated genes to be used in our gene enrichment analysis. 
-
 
 ```{r}
-gostres_upreg <- gprofiler2::gost(upregulated_genes, organism = "hsapiens", ordered_query = FALSE,
-  multi_query = FALSE, significant = TRUE, exclude_iea = TRUE,
-  measure_underrepresentation = FALSE, evcodes = FALSE,
-  user_threshold = 0.05, correction_method = c("g_SCS", "bonferroni",
-  "fdr", "false_discovery_rate", "gSCS", "analytical"),
-  domain_scope = c("annotated"), custom_bg = NULL,
-  numeric_ns = "", sources = NULL)
-
-gostres_downreg <- gprofiler2::gost(downregulated_genes, organism = "hsapiens", ordered_query = FALSE,
-  multi_query = FALSE, significant = TRUE, exclude_iea = TRUE,
-  measure_underrepresentation = FALSE, evcodes = FALSE,
-  user_threshold = 0.05, correction_method = c("g_SCS", "bonferroni",
-  "fdr", "false_discovery_rate", "gSCS", "analytical"),
-  domain_scope = c("annotated"), custom_bg = NULL,
-  numeric_ns = "", sources = NULL)
+# gostres_upreg <- gprofiler2::gost(upregulated_genes, organism = "hsapiens", ordered_query = FALSE,
+#   multi_query = FALSE, significant = TRUE, exclude_iea = TRUE,
+#   measure_underrepresentation = FALSE, evcodes = FALSE,
+#   user_threshold = 0.05, correction_method = c("g_SCS", "bonferroni",
+#   "fdr", "false_discovery_rate", "gSCS", "analytical"),
+#   domain_scope = c("annotated"), custom_bg = NULL,
+#   numeric_ns = "", sources = NULL)
+# 
+# gostres_downreg <- gprofiler2::gost(downregulated_genes, organism = "hsapiens", ordered_query = FALSE,
+#   multi_query = FALSE, significant = TRUE, exclude_iea = TRUE,
+#   measure_underrepresentation = FALSE, evcodes = FALSE,
+#   user_threshold = 0.05, correction_method = c("g_SCS", "bonferroni",
+#   "fdr", "false_discovery_rate", "gSCS", "analytical"),
+#   domain_scope = c("annotated"), custom_bg = NULL,
+#   numeric_ns = "", sources = NULL)
 ```
 
 ```{r}
-gprofiler2::gostplot(gostres_upreg, capped = TRUE, interactive = TRUE, pal = c(`GO:MF`
-  = "#dc3912", `GO:BP` = "#ff9900", `GO:CC` = "#109618", KEGG = "#dd4477",
-  REAC = "#3366cc", WP = "#0099c6", TF = "#5574a6", MIRNA = "#22aa99", HPA
-  = "#6633cc", CORUM = "#66aa00", HP = "#990099"))
+# gprofiler2::gostplot(gostres_upreg, capped = TRUE, interactive = TRUE, pal = c(`GO:MF`
+#   = "#dc3912", `GO:BP` = "#ff9900", `GO:CC` = "#109618", KEGG = "#dd4477",
+#   REAC = "#3366cc", WP = "#0099c6", TF = "#5574a6", MIRNA = "#22aa99", HPA
+#   = "#6633cc", CORUM = "#66aa00", HP = "#990099"))
 
 ```
 
 ```{r}
-gprofiler2::gostplot(gostres_downreg, capped = TRUE, interactive = TRUE, pal = c(`GO:MF`
-  = "#dc3912", `GO:BP` = "#ff9900", `GO:CC` = "#109618", KEGG = "#dd4477",
-  REAC = "#3366cc", WP = "#0099c6", TF = "#5574a6", MIRNA = "#22aa99", HPA
-  = "#6633cc", CORUM = "#66aa00", HP = "#990099"))
+# gprofiler2::gostplot(gostres_downreg, capped = TRUE, interactive = TRUE, pal = c(`GO:MF`
+#   = "#dc3912", `GO:BP` = "#ff9900", `GO:CC` = "#109618", KEGG = "#dd4477",
+#   REAC = "#3366cc", WP = "#0099c6", TF = "#5574a6", MIRNA = "#22aa99", HPA
+#   = "#6633cc", CORUM = "#66aa00", HP = "#990099"))
 ```

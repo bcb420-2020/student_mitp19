@@ -136,9 +136,8 @@ plotMeanVar(d, show.raw.vars = TRUE, show.tagwise.vars=TRUE,
 ```
 
 ```{r identifier mapping}
-library(biomaRt)
-listMarts()
-listEnsemblArchives()[1:10,]
+# listMarts()
+# listEnsemblArchives()[1:10,]
 
 ensembl <- useMart("ensembl")
 datasets <- listDatasets(ensembl)
